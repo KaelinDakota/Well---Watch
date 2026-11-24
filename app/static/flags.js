@@ -75,6 +75,10 @@
     F('days_since_last_safety_event', 'Days since last safety event', 'number', 'Any category', 'Safety · events'),
     F('licence_status', 'Licence status', 'text', 'Active, Suspended, Inactive', 'Safety · status'),
     F('days_since_production', 'Days since the well last produced', 'number', 'For inactive / suspended well tracking', 'Safety · status'),
+    // engineer notes (context, not official records)
+    F('notes_count', 'Engineer notes on this well', 'number', 'Open notes engineers have written on the well', 'Notes'),
+    F('pending_reports', 'Field reports waiting for the official record', 'number', 'Notes reporting a test or event the source system does not show yet', 'Notes'),
+    F('unconfirmed_reports', 'Field reports overdue for confirmation', 'number', 'Waiting notes past their expected date with no matching record in the source system', 'Notes'),
   ];
   const TEST_FIELDS = [
     F('test_type', 'Test / inspection type', 'text', 'e.g. Subsurface safety valve test (any type, including ones engineers added)'),
@@ -90,7 +94,7 @@
     F('result_unit', 'Result unit', 'text', 'Unit of the result value'),
     F('interval_months', 'Required interval (months)', 'number', 'How often the test is required'),
     F('notes', 'Notes', 'text', 'Free text on the latest record'),
-    F('source', 'Recorded in', 'text', '"system" or "app: <who logged it>"'),
+    F('source', 'Source system', 'text', 'Where the record comes from (the maintenance / integrity system)'),
   ];
   const EVENT_FIELDS = [
     F('category', 'Event category', 'text', 'ESD trip, PSV lift, H2S alarm, Gas detector alarm, Spill, Gas release, Flowline failure, Fire, Electrical fault, Regulator non-compliance, Near miss, or any category engineers log'),
@@ -104,7 +108,7 @@
     F('substance', 'Substance', 'text', 'Produced water, emulsion, oil, natural gas...'),
     F('reportable', 'Reportable to regulator', 'boolean', 'Must be reported'),
     F('reported_to_regulator', 'Reported to regulator', 'boolean', 'Has been reported'),
-    F('source', 'Recorded in', 'text', '"system" or "app: <who logged it>"'),
+    F('source', 'Source system', 'text', 'Where the record comes from (the HSE incident system)'),
   ];
   const DATASETS = {
     well: {label: 'Well readings & status', short: 'well', fields: WELL_FIELDS},
@@ -197,6 +201,8 @@
       '{downtime_events_14d} unplanned events in 14 days; uptime {uptime_14d_pct}%.', 'Look for a root cause (pump-off settings, stuffing box, controller).'),
     R('NEGATIVE_MARGIN', 'Operating cost above netback', 'Warning', 20, 'Economics', [c('margin_per_boe', 'lt', 0)],
       'October margin {margin_per_boe} $/boe (cost {loe_per_boe} $/boe).', 'Review operating costs or candidate for optimization / shut-in study.'),
+    R('NOTE_UNCONFIRMED', 'Field report not confirmed', 'Review', 5, 'Data', [c('unconfirmed_reports', 'gte', 1)],
+      '{unconfirmed_reports} field report(s) not in the source system by the expected date.', 'Check with field staff that the test or event was recorded in the maintenance or HSE system.'),
     R('DATA_STALE', 'SCADA data missing', 'Review', 10, 'Data', [c('days_since_last_data', 'gte', 2)],
       'No SCADA data for {days_since_last_data} days.', 'Ask field / SCADA support to check communications before trusting this well\'s numbers.'),
   ];
@@ -331,7 +337,7 @@
         const a = acks[wid + '|' + f.rule_id];
         if (a && !a.cleared && (!a.until_date || toDate(a.until_date) >= asOfD)) {
           const why = resurfaced(f, r, a, fc);
-          if (why) f.resurfaced = why; else f.handled = {type: 'ack', note: a.note, until: a.until_date, by: a.acked_by};
+          if (why) f.resurfaced = why; else f.handled = {type: 'ack', note: a.note, until: a.until_date, by: a.acked_by, owner: a.owner};
         }
         if (!f.handled && !f.safety && opts.woHandled && Number(fc.open_work_orders) > 0) f.handled = {type: 'work_order', note: fc.open_work_order};
         f.fix_cost = !f.safety ? (est[wid + '|' + f.rule_id] ?? r.fix_cost ?? null) : null;

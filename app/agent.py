@@ -33,7 +33,7 @@ Rules:
 2. Every tool result has an evidence_id. End EVERY sentence or bullet that states a fact with the evidence id(s) it came from, written exactly like [E2] or [E2, E5] (plain square brackets). Only cite ids you received from tools in this conversation; call a tool before you cite it.
 3. Copy numbers exactly as the tools give them, with units (bbl/d, psi, %, $/day). Use the summary figures tools provide instead of doing your own arithmetic. Every bullet with a number needs a citation.
 4. The ranking comes from the engineer's own flag rules, in tiers: "safety" (Critical/Warning safety flags, by severity), then "production" (by $/day at risk, fastest payback or points, per the engineer's setting), then "watch" (Review-only flags); "handled" wells were marked as being handled and are out of the top 10. Related rules count once. Say so when you explain why a well ranks where it does.
-5. Safety: use get_safety_status, get_tests_and_inspections and get_safety_events for integrity, H2S, pressure limits, tests, spills, releases and regulator items. Safety flags rank first when the engineer's "safety first" setting is on. For any general question about safety issues, FIRST call get_ranked_wells and report every well whose safety_flag is Critical or Warning with its safety flag messages; then add open events or overdue tests if relevant. You don't make safety, shut-in or reporting decisions: give the evidence and the suggested next step, and say to follow company procedures and the regulator's requirements.
+5. Tests come from the maintenance / integrity system and safety events from the HSE incident system; engineers don't record them in this app. Engineer notes (get_well_notes) are context, not official records: say so when you use one. Safety: use get_safety_status, get_tests_and_inspections and get_safety_events for integrity, H2S, pressure limits, tests, spills, releases and regulator items. Safety flags rank first when the engineer's "safety first" setting is on. For any general question about safety issues, FIRST call get_ranked_wells and report every well whose safety_flag is Critical or Warning with its safety flag messages; then add open events or overdue tests if relevant. You don't make safety, shut-in or reporting decisions: give the evidence and the suggested next step, and say to follow company procedures and the regulator's requirements.
 6. Be concise: under 180 words. Plain sentences or "- " bullets. No tables, no headings."""
 
 
@@ -59,6 +59,8 @@ def tool_specs():
         {"name": "get_definitions", "description": "Plain-language definitions of oil and gas terms and Well Watch concepts (e.g. MAASP, type curve, water cut, SCVF, EPZ, points, tiers, payback, being handled).",
          "parameters": s({"terms": {"type": "array", "items": {"type": "string"}, "description": "terms to look up; partial words are fine"}}, ["terms"])},
         {"name": "get_my_rules", "description": "The current engineer's flag rules and ranking settings: each rule's conditions, severity, points, group, fix cost and whether it is on.", "parameters": s({})},
+        {"name": "get_well_notes", "description": "Notes engineers wrote on a well (context such as 'operator says the monitor is faulty', or reports waiting for the official record). Notes are not official records.",
+         "parameters": s(wid, ["well_id"])},
         {"name": "portfolio_summary", "description": "Totals for an engineer's wells (or all wells): well count, oil vs type curve last 7 days, wells down, value at risk.",
          "parameters": s({"engineer_id": {"type": "string", "description": "ENG-1..ENG-4; defaults to the current engineer; ALL for every well"}})},
     ]
@@ -213,6 +215,12 @@ class Tools:
             eid = self._ev(conv, name, "app: your saved flag rules", f"{S}.app_flag_rules + {S}.app_flag_settings", "Rules and ranking settings sent by the app for this engineer", {},
                            rows + [{"rule": "(ranking settings)", "conditions": json.dumps(settings)}], f"{ctx.get('engineer_name', 'Engineer')}'s flag rules and ranking settings", ["rule"])
             return {"evidence_id": eid, "settings": settings, "rules": rows}
+        if name == "get_well_notes":
+            sql = f"""SELECT note_id, well_id, rule_id, body, pending_kind, pending_type, expected_by, created_by, created_at FROM (
+                      SELECT *, row_number() OVER (PARTITION BY note_id ORDER BY created_at DESC) rn FROM {S}.app_well_notes WHERE well_id = :w) WHERE rn = 1 AND NOT archived ORDER BY created_at DESC"""
+            rows = self.q(sql, {"w": well})
+            eid = self._ev(conv, name, "app: engineer notes", f"{S}.app_well_notes", sql, {"w": well}, rows, f"{well} engineer notes", ["note_id"])
+            return {"evidence_id": eid, "notes": rows, "reminder": "Notes are context written by engineers, not official test or incident records."}
         return {"error": f"unknown tool {name}"}
 
 

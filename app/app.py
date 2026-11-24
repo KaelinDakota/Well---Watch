@@ -80,7 +80,7 @@ def bundle():
     settings = {r["engineer_id"]: {"safety_first": r["safety_first"], "wo_handled": r["wo_handled"]} for r in query(f"""SELECT engineer_id, safety_first, wo_handled FROM (SELECT *, row_number() OVER (PARTITION BY engineer_id ORDER BY saved_at DESC) rn
                                                                     FROM {S}.app_flag_settings) WHERE rn = 1""")}
     return {"as_of": "2026-11-22", "today": "2026-11-23", "snapshot": snap, "engineers": engineers, "saved_rules": rules, "settings": settings,
-            "acks": query(f"""SELECT engineer_id, well_id, rule_id, until_date, note, snapshot_json, cleared, acked_by, acked_at FROM (SELECT *, row_number() OVER (PARTITION BY engineer_id, well_id, rule_id ORDER BY acked_at DESC) rn
+            "acks": query(f"""SELECT engineer_id, well_id, rule_id, until_date, note, snapshot_json, cleared, acked_by, acked_at, owner FROM (SELECT *, row_number() OVER (PARTITION BY engineer_id, well_id, rule_id ORDER BY acked_at DESC) rn
                                FROM {S}.app_flag_acks) WHERE rn = 1"""),
             "estimates": query(f"""SELECT engineer_id, well_id, rule_id, cost_cad, note, entered_by, entered_at FROM (SELECT *, row_number() OVER (PARTITION BY engineer_id, well_id, rule_id ORDER BY entered_at DESC) rn
                                     FROM {S}.app_fix_estimates) WHERE rn = 1"""),
@@ -89,6 +89,10 @@ def bundle():
                                        FROM {S}.app_custom_fields) WHERE rn = 1 AND field_type <> 'deleted' ORDER BY label"""),
             "attributes": query(f"""SELECT well_id, field_key, value, updated_by, updated_at FROM (SELECT *, row_number() OVER (PARTITION BY well_id, field_key ORDER BY updated_at DESC) rn
                                     FROM {S}.app_well_attributes) WHERE rn = 1"""),
+            "notes": query(f"""SELECT note_id, engineer_id, well_id, rule_id, body, pending_kind, pending_type, expected_by, created_by, created_at FROM (
+                                SELECT *, row_number() OVER (PARTITION BY note_id ORDER BY created_at DESC) rn FROM {S}.app_well_notes) WHERE rn = 1 AND NOT archived ORDER BY created_at DESC"""),
+            "freshness": cached("fresh", lambda: query(f"SELECT * FROM {S}.gold_source_freshness"), 600),
+            "now": "2026-11-23T08:00:00",
             "test_catalog": cached("cat", lambda: query(f"SELECT * FROM {S}.silver_test_catalog ORDER BY test_group, test_type")),
             "cleaning_rules": cached("clean", lambda: query(f"SELECT rule_id, description FROM {S}.silver_cleaning_rules ORDER BY rule_id")),
             "model": LLM_ENDPOINT, "workspace_url": ws().config.host.rstrip("/")}
@@ -109,10 +113,8 @@ def well(well_id: str):
         "safety_daily": query(f"""SELECT reading_date, sc_psi, surface_casing_limit_psi, flowline_psi_max, flowline_maop_psi, casing_psi, prod_casing_maasp_psi, h2s_ambient_ppm_max, vent_gas_m3
                                   FROM {S}.gold_safety_daily WHERE well_id = :w AND reading_date >= date'2026-08-01' ORDER BY reading_date""", p),
         "register": (query(f"SELECT * FROM {S}.silver_well_safety WHERE well_id = :w", p) or [None])[0],
-        "test_history": query(f"""SELECT test_id AS record_id, test_type, test_group, test_date, result_status, result_original, result_value, result_unit, notes, 'system' AS source
-                                  FROM {S}.silver_compliance_tests WHERE well_id = :w
-                                  UNION ALL SELECT entry_id, test_type, test_group, test_date, result_status, result_status, result_value, result_unit, notes, 'app: ' || entered_by
-                                  FROM {S}.app_compliance_entries WHERE well_id = :w ORDER BY test_date DESC""", p),
+        "test_history": query(f"""SELECT test_id AS record_id, test_type, test_group, test_date, result_status, result_original, result_value, result_unit, notes, 'Maintenance system' AS source
+                                  FROM {S}.silver_compliance_tests WHERE well_id = :w ORDER BY test_date DESC""", p),
     }
 
 
@@ -164,8 +166,40 @@ async def ack_flag(request: Request):
     if not cleared and b.get("safety") and not note: raise HTTPException(400, "a note is required to mark a safety flag as being handled")
     snap = b.get("snapshot") or {}
     if not isinstance(snap, dict) or len(json.dumps(snap)) > 20000: raise HTTPException(400, "bad snapshot")
-    query(f"INSERT INTO {S}.app_flag_acks VALUES (:e, :w, :r, cast(:u AS DATE), :n, :s, cast(:c AS BOOLEAN), :who, current_timestamp())",
-          {"e": eng, "w": _well(b.get("well_id")), "r": rule, "u": until, "n": note, "s": json.dumps(snap), "c": str(cleared).lower(), "who": _who(request)})
+    query(f"""INSERT INTO {S}.app_flag_acks (engineer_id, well_id, rule_id, until_date, note, snapshot_json, cleared, acked_by, acked_at, owner)
+              VALUES (:e, :w, :r, cast(:u AS DATE), :n, :s, cast(:c AS BOOLEAN), :who, current_timestamp(), :o)""",
+          {"e": eng, "w": _well(b.get("well_id")), "r": rule, "u": until, "n": note, "s": json.dumps(snap), "c": str(cleared).lower(), "who": _who(request), "o": _txt(b.get("owner"), 80)})
+    return {"ok": True}
+
+
+@app.post("/api/notes")
+async def add_note(request: Request):
+    """Add an engineer note to a well (optionally to one flag). With pending_kind/pending_type it reports something the source
+    system doesn't show yet; the app confirms it when the matching record arrives, or reminds after expected_by."""
+    b = await request.json()
+    eng, rule = b.get("engineer_id") or "", b.get("rule_id") or ""
+    if not ENG_RE.fullmatch(eng) or (rule and not RULE_ID_RE.fullmatch(rule)): raise HTTPException(400, "bad engineer or rule id")
+    body = _txt(b.get("body"), 1000)
+    if not body: raise HTTPException(400, "write a note")
+    kind = b.get("pending_kind") or None
+    if kind not in (None, "test", "event"): raise HTTPException(400, "pending_kind must be test or event")
+    ptype = _txt(b.get("pending_type"), 120) if kind else None
+    if kind and not ptype: raise HTTPException(400, "say which test or event you are waiting for")
+    exp = _date(b.get("expected_by")) if kind else None
+    nid = "N-" + uuid.uuid4().hex[:10]
+    query(f"""INSERT INTO {S}.app_well_notes VALUES (:id, :e, :w, :r, :b, :k, :t, cast(:x AS DATE), false, :who, current_timestamp())""",
+          {"id": nid, "e": eng, "w": _well(b.get("well_id")), "r": rule or None, "b": body, "k": kind, "t": ptype, "x": exp, "who": _who(request)})
+    return {"ok": True, "note_id": nid}
+
+
+@app.post("/api/notes/{note_id}/archive")
+async def archive_note(note_id: str, request: Request):
+    if not re.fullmatch(r"N-[0-9a-f]{10}", note_id): raise HTTPException(400, "bad note id")
+    rows = query(f"""SELECT * FROM (SELECT *, row_number() OVER (PARTITION BY note_id ORDER BY created_at DESC) rn FROM {S}.app_well_notes WHERE note_id = :n) WHERE rn = 1""", {"n": note_id})
+    if not rows: raise HTTPException(404, "no such note")
+    n = rows[0]
+    query(f"""INSERT INTO {S}.app_well_notes VALUES (:id, :e, :w, :r, :b, :k, :t, cast(:x AS DATE), true, :who, current_timestamp())""",
+          {"id": note_id, "e": n["engineer_id"], "w": n["well_id"], "r": n["rule_id"], "b": n["body"], "k": n["pending_kind"], "t": n["pending_type"], "x": n["expected_by"], "who": _who(request)})
     return {"ok": True}
 
 
@@ -179,46 +213,6 @@ async def fix_estimate(request: Request):
     if cost is not None and cost < 0: raise HTTPException(400, "cost must be 0 or more")
     query(f"INSERT INTO {S}.app_fix_estimates VALUES (:e, :w, :r, cast(:c AS DOUBLE), :n, :who, current_timestamp())",
           {"e": eng, "w": _well(b.get("well_id")), "r": rule, "c": cost, "n": _txt(b.get("note")), "who": _who(request)})
-    return {"ok": True}
-
-
-@app.post("/api/tests")
-async def log_test(request: Request):
-    """Log a test or inspection of any type. Unknown types are fine: interval and safety-critical come from the form."""
-    b = await request.json()
-    if not _txt(b.get("test_type")): raise HTTPException(400, "test type is required")
-    if b.get("result_status") not in ("Pass", "Fail", "Non-serious", "Serious"): raise HTTPException(400, "result must be Pass, Fail, Non-serious or Serious")
-    iv = _num(b.get("interval_months"))
-    if not iv or iv <= 0: raise HTTPException(400, "interval (months) must be more than 0")
-    eid = "APP-T-" + uuid.uuid4().hex[:10]
-    query(f"""INSERT INTO {S}.app_compliance_entries VALUES (:id, :w, :t, :g, cast(:iv AS INT), cast(:sc AS BOOLEAN), cast(:d AS DATE), :r, cast(:v AS DOUBLE), :u, :n, :who, current_timestamp())""",
-          {"id": eid, "w": _well(b.get("well_id")), "t": _txt(b["test_type"], 120), "g": _txt(b.get("test_group"), 60) or "Custom", "iv": int(iv), "sc": b2s(b.get("safety_critical")),
-           "d": _date(b.get("test_date")), "r": b["result_status"], "v": _num(b.get("result_value")), "u": _txt(b.get("result_unit"), 30), "n": _txt(b.get("notes")), "who": _who(request)})
-    return {"ok": True, "entry_id": eid}
-
-
-@app.post("/api/events")
-async def log_event(request: Request):
-    """Log a safety event of any category."""
-    b = await request.json()
-    if not _txt(b.get("category")): raise HTTPException(400, "category is required")
-    if b.get("status") not in ("Open", "Closed"): raise HTTPException(400, "status must be Open or Closed")
-    eid = "APP-E-" + uuid.uuid4().hex[:10]
-    query(f"""INSERT INTO {S}.app_safety_event_entries VALUES (:id, :w, cast(:d AS DATE), :c, :desc, cast(:pl AS BOOLEAN), cast(:v AS DOUBLE), :sub,
-              cast(:rep AS BOOLEAN), cast(:rtd AS BOOLEAN), :st, :who, current_timestamp())""",
-          {"id": eid, "w": _well(b.get("well_id")), "d": _date(b.get("event_date")), "c": _txt(b["category"], 80), "desc": _txt(b.get("description")), "pl": b2s(b.get("planned")),
-           "v": _num(b.get("volume_m3")), "sub": _txt(b.get("substance"), 80), "rep": b2s(b.get("reportable")), "rtd": b2s(b.get("reported_to_regulator")), "st": b["status"], "who": _who(request)})
-    return {"ok": True, "event_id": eid}
-
-
-@app.post("/api/events/{event_id}/update")
-async def update_event(event_id: str, request: Request):
-    """Close an event, or record that it was reported to the regulator. Works for field-log and app events."""
-    if not re.fullmatch(r"(SE\d{5}|APP-E-[0-9a-f]{10})", event_id): raise HTTPException(400, "bad event id")
-    b = await request.json()
-    if b.get("status") not in ("Open", "Closed"): raise HTTPException(400, "status must be Open or Closed")
-    query(f"INSERT INTO {S}.app_event_updates VALUES (:id, :st, cast(:r AS BOOLEAN), :n, :who, current_timestamp())",
-          {"id": event_id, "st": b["status"], "r": None if b.get("reported_to_regulator") is None else b2s(b.get("reported_to_regulator")), "n": _txt(b.get("note")), "who": _who(request)})
     return {"ok": True}
 
 
@@ -317,37 +311,27 @@ def lineage(kind: str, well_id: str = "", date: str = "", bronze_id: str = "", m
             steps.append({"layer": "bronze", "table": f"{S}.bronze_well_safety_register", "note": "Limits as exported (pressure_unit shows kPa or psi).", "rows": rb})
             steps.append({"layer": "raw", "table": "landing volume", "files": sorted({r["_source_file"] for r in b + rb})})
     elif kind == "test":
-        if not re.fullmatch(r"(T\d{5}|APP-T-[0-9a-f]{10})", bronze_id): raise HTTPException(400, "bad test id")
+        if not re.fullmatch(r"T\d{5}", bronze_id): raise HTTPException(400, "bad test id")
         g = query(f"SELECT * FROM {S}.gold_v_compliance_items WHERE record_id = :b", {"b": bronze_id})
         steps.append({"layer": "gold", "table": f"{S}.gold_v_compliance_items",
                       "note": "Latest test of this type for the well, with the next due date (last test + required interval) and days overdue as of 2026-11-23." if g else
                               "A newer test of this type exists, so this record is history and isn't the one the rules use.", "rows": g})
-        if bronze_id.startswith("APP-"):
-            steps.append({"layer": "silver", "table": f"{S}.app_compliance_entries", "note": "Logged by an engineer in Well Watch.",
-                          "rows": query(f"SELECT * FROM {S}.app_compliance_entries WHERE entry_id = :b", {"b": bronze_id})})
-        else:
-            s_ = query(f"SELECT * FROM {S}.silver_compliance_tests WHERE test_id = :b", {"b": bronze_id})
-            steps.append({"layer": "silver", "table": f"{S}.silver_compliance_tests", "note": "Result normalized; catalog interval and safety-critical flag joined.", "rows": s_,
-                          "rules": [{"rule_id": r, "description": clean.get(r, "")} for row in s_ for r in (row.get("rules_applied") or [])]})
-            b = query(f"SELECT * FROM {S}.bronze_compliance_tests WHERE test_id = :b", {"b": bronze_id})
-            steps.append({"layer": "bronze", "table": f"{S}.bronze_compliance_tests", "note": "As exported from the compliance system.", "rows": b})
-            steps.append({"layer": "raw", "table": "landing volume", "files": sorted({r["_source_file"] for r in b})})
+        s_ = query(f"SELECT * FROM {S}.silver_compliance_tests WHERE test_id = :b", {"b": bronze_id})
+        steps.append({"layer": "silver", "table": f"{S}.silver_compliance_tests", "note": "Result normalized; catalog interval and safety-critical flag joined.", "rows": s_,
+                      "rules": [{"rule_id": r, "description": clean.get(r, "")} for row in s_ for r in (row.get("rules_applied") or [])]})
+        b = query(f"SELECT * FROM {S}.bronze_compliance_tests WHERE test_id = :b", {"b": bronze_id})
+        steps.append({"layer": "bronze", "table": f"{S}.bronze_compliance_tests", "note": "As exported from the maintenance / integrity system.", "rows": b})
+        steps.append({"layer": "raw", "table": "landing volume", "files": sorted({r["_source_file"] for r in b})})
     elif kind == "safety_event":
-        if not re.fullmatch(r"(SE\d{5}|APP-E-[0-9a-f]{10})", bronze_id): raise HTTPException(400, "bad event id")
-        steps.append({"layer": "gold", "table": f"{S}.gold_v_safety_events", "note": "Event with the latest status update applied.",
+        if not re.fullmatch(r"SE\d{5}", bronze_id): raise HTTPException(400, "bad event id")
+        steps.append({"layer": "gold", "table": f"{S}.gold_v_safety_events", "note": "Event as the HSE incident system reports it.",
                       "rows": query(f"SELECT * FROM {S}.gold_v_safety_events WHERE event_id = :b", {"b": bronze_id})})
-        upd = query(f"SELECT * FROM {S}.app_event_updates WHERE event_id = :b ORDER BY updated_at DESC", {"b": bronze_id})
-        if upd: steps.append({"layer": "silver", "table": f"{S}.app_event_updates", "note": "Status updates made in Well Watch.", "rows": upd})
-        if bronze_id.startswith("APP-"):
-            steps.append({"layer": "silver", "table": f"{S}.app_safety_event_entries", "note": "Logged by an engineer in Well Watch.",
-                          "rows": query(f"SELECT * FROM {S}.app_safety_event_entries WHERE event_id = :b", {"b": bronze_id})})
-        else:
-            s_ = query(f"SELECT * FROM {S}.silver_safety_events WHERE event_id = :b", {"b": bronze_id})
-            steps.append({"layer": "silver", "table": f"{S}.silver_safety_events", "note": "Category assigned by ai_classify; original type kept.", "rows": s_,
-                          "rules": [{"rule_id": r, "description": clean.get(r, "")} for row in s_ for r in (row.get("rules_applied") or [])]})
-            b = query(f"SELECT * FROM {S}.bronze_safety_events WHERE event_id = :b", {"b": bronze_id})
-            steps.append({"layer": "bronze", "table": f"{S}.bronze_safety_events", "rows": b})
-            steps.append({"layer": "raw", "table": "landing volume", "files": sorted({r["_source_file"] for r in b})})
+        s_ = query(f"SELECT * FROM {S}.silver_safety_events WHERE event_id = :b", {"b": bronze_id})
+        steps.append({"layer": "silver", "table": f"{S}.silver_safety_events", "note": "Category assigned by ai_classify; original type kept.", "rows": s_,
+                      "rules": [{"rule_id": r, "description": clean.get(r, "")} for row in s_ for r in (row.get("rules_applied") or [])]})
+        b = query(f"SELECT * FROM {S}.bronze_safety_events WHERE event_id = :b", {"b": bronze_id})
+        steps.append({"layer": "bronze", "table": f"{S}.bronze_safety_events", "rows": b})
+        steps.append({"layer": "raw", "table": "landing volume", "files": sorted({r["_source_file"] for r in b})})
     elif kind == "safety_snapshot":
         steps.append({"layer": "gold", "table": f"{S}.gold_v_well_safety", "note": "Safety fields the rules use. Recent = Nov 16-22, baseline = Oct 10 - Nov 8, month to date = Nov 1-22.",
                       "rows": query(f"SELECT * FROM {S}.gold_v_well_safety WHERE well_id = :w", {"w": well_id})})

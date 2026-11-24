@@ -16,9 +16,10 @@ All data is synthetic: 200 wells, 4 engineers, 6 months of daily data.
 | `pipeline/02_silver.sql` | Silver layer: cleaned tables, plus `silver_cleaning_rules`. Silver deduplicates resends, converts E3M3 to MCF, nulls sensor errors, cleans well names and uses `ai_classify` to categorize downtime text. Each silver row records which rules touched it. |
 | `pipeline/03_gold.sql` | Gold layer: `gold_daily_well` (with type-curve targets), `gold_downtime_events`, `gold_monthly_economics` and `gold_well_snapshot`, which holds one row per well with every field the flag rules use. |
 | `pipeline/05_ranking.sql` | Tables for "being handled" acknowledgements (`app_flag_acks`), per-well fix cost estimates (`app_fix_estimates`), and ranking settings. |
+| `pipeline/07_engineer_notes.sql` | Removes the app-written test and event tables, because those records come only from the source systems. Adds `app_well_notes`, an owner column on `app_flag_acks`, and `gold_source_freshness`. |
 | `pipeline/06_glossary.sql` | `gold_glossary`: plain-language definitions the assistant cites for "what does X mean?" questions. |
 | `pipeline/04_safety.sql` | Safety layer. Bronze, silver and gold safety tables; `ai_classify` sets event categories. Views merge system data with what engineers log in the app: `gold_v_compliance_items` (latest of each test type with its due date), `gold_v_safety_events` and `gold_v_well_safety`. Also creates the `app_*` tables the app writes to. |
-| `app/app.py` | FastAPI backend. Endpoints: `/api/bundle`, `/api/well/{id}`, `PUT /api/rules/{engineer}`, `/api/lineage`, `/api/chat`, plus the endpoints engineers write through: `/api/tests`, `/api/events` (and `/api/events/{id}/update`), `/api/custom_fields`, `/api/attributes/{well}`, `/api/acks` and `/api/estimates`. |
+| `app/app.py` | FastAPI backend. Endpoints: `/api/bundle`, `/api/well/{id}`, `PUT /api/rules/{engineer}`, `/api/lineage`, `/api/chat`, plus the endpoints engineers write through: `/api/notes` (and `/api/notes/{id}/archive`), `/api/acks`, `/api/estimates`, `/api/custom_fields` and `/api/attributes/{well}`. Tests and safety events are read-only. |
 | `app/agent.py` | Our own chat agent (details below). |
 | `app/static/` | The deployed UI: *My day*, *My wells*, *Safety*, *Flag rules*, the well page, the chat panel, and the evidence and lineage viewers. `flags.js` is the deterministic rule and ranking engine. |
 | `web/` | Source copies of the three UI files. Edit these, then copy them to `app/static/` before deploying. |
@@ -37,9 +38,15 @@ All data is synthetic: 200 wells, 4 engineers, 6 months of daily data.
 - **Lift equipment:** pumping-unit guard and brake inspections, ESP electrical faults.
 - **Status and compliance:** inactive wells, overdue tests, open regulator non-compliances.
 
+**Where records come from.** Production engineers don't record tests or incidents in this app.
+- **Tests** come from the maintenance / integrity system (`compliance_tests.csv` → `silver_compliance_tests`).
+- **Safety events** come from the HSE incident system (`safety_events.csv` → `silver_safety_events`).
+
+Both are read-only here. What engineers add is context: **notes**. A note can report something the source system doesn't show yet (`pending_kind`/`pending_type`/`expected_by`). The UI confirms it when a matching record arrives, which drives `notes_count`, `pending_reports` and `unconfirmed_reports` on each well. The starter rule *Field report not confirmed* flags the overdue ones. The **data bar** under the tabs reads `gold_source_freshness` and turns a source amber when its last delivery is later than `stale_after_hours`.
+
 **How rules work.**
 - A rule can look at one of three things: **well readings and status**, **each test or inspection**, or **each safety event**. For tests and events, a well is flagged when at least N items match (for example, 3 or more unplanned ESD trips in 30 days).
-- **Anything the feeds don't carry can still be tracked.** Engineers can log tests and events of any type, close events or mark them reported, and define their own per-well fields (number, text, yes/no, date). All of these become available in the rule editor.
+- **Anything the feeds don't carry can still be tracked.** Engineers define their own per-well fields (number, text, yes/no, date), which become available in the rule editor.
 - **Safety first** is on by default. Wells with a Critical or Warning safety flag rank above all other wells.
 
 The app flags and informs. Decisions on shut-in, repair and reporting stay with qualified people, under company procedures and regulator requirements.
@@ -54,7 +61,7 @@ Rules are plain JSON: conditions, a severity, a weight in points, and optionally
    - **Fastest payback**: fix cost ÷ $/day. A fix cost comes from the rule's default or the engineer's own estimate for that well.
    - **Points.**
 3. **Watch list.** Wells with only Review-level flags, ordered by points.
-4. **Being handled.** Flags an engineer marked as being handled, with an end date and a note (required for safety flags). They leave the top 10 and come back on their own when:
+4. **Being handled.** Flags an engineer marked as being handled, with an owner, a follow-up date, and a note (required for safety flags). They leave the top 10 and come back on their own when:
    - the end date passes;
    - a condition moves more than 10% further past its threshold;
    - a new matching test or event appears.
@@ -114,7 +121,7 @@ Each answer ends with a **Sources** list that the app builds from the lookups it
 ## Run it
 
 1. Upload the files from `dataset/raw/` to `/Volumes/workspace/well_ops/landing/`.
-2. Run `pipeline/01–06` in order (`python run_sql.py pipeline/01_bronze.sql`, …).
+2. Run `pipeline/01–07` in order (`python run_sql.py pipeline/01_bronze.sql`, …).
 3. Run `python deploy.py`.
 
 The app needs a serverless SQL warehouse and access to the `databricks-gpt-oss-120b` endpoint. You can change the endpoint in `deploy.py`.

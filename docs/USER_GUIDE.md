@@ -34,8 +34,9 @@ Open the app link in your browser and sign in with your Databricks account. You 
 3. **Read each card.** It says what is wrong, gives the numbers, and suggests a next step.
 4. **Click a well** to see its page. The box at the top says exactly why it is flagged.
 5. **Not sure about a number?** Click **trace** to see where it came from.
-6. **Already dealing with something?** Click **mark as being handled** so it leaves your list until it is fixed, or until it gets worse.
-7. **Have a question?** Click **Ask the data** and type it.
+6. **Someone is already on it?** Click **mark as being handled**, say who is handling it and when to follow up. It leaves your list until then, or comes back sooner if it gets worse.
+7. **Know something the systems don't?** Click **add note**. For example, "field says the test was done this morning".
+8. **Have a question?** Click **Ask the data** and type it.
 
 ---
 
@@ -47,10 +48,37 @@ Open the app link in your browser and sign in with your Databricks account. You 
 | **Ask the data** (top right) | Opens the chat assistant on the right side. |
 | **My day** | Today's ranked list of wells that need attention. |
 | **My wells** | Every well you look after in one sortable table. |
-| **Safety** | Overdue and failed tests, open incidents, and forms to log new ones. |
+| **Safety** | Overdue, failed and upcoming tests, and open incidents, read from the source systems. |
 | **Flag rules** | The rules that decide what gets flagged, and how the list is ranked. |
 
 The numbers next to each tab are counts. For example, *Safety 6* means 6 wells have a safety issue.
+
+### The data bar (under the tabs)
+
+This bar shows how current each **source system** is: production, safety readings and downtime "through" a date, the test and incident systems by when they last updated, and costs through the last closed month. A dot is green when the source arrived on time and turns amber (⚠) when it is late, so numbers from it may be out of date. Click **details** for the full table.
+
+![Data sources](images/12_freshness.png)
+
+### Where the data comes from, and what you can change
+
+Well Watch reads the company's systems; it doesn't replace them.
+
+| Data | Comes from | Who records it |
+|---|---|---|
+| Production, pressures, gas detectors | SCADA (the field sensors) | Automatic |
+| Tests and inspections | The maintenance / integrity system | Field operators, technicians, test contractors |
+| Safety events (incidents) | The HSE incident system | Whoever was on site, then the HSE team |
+| Downtime reasons | The field downtime log | Field operators |
+| Operating costs | Accounting | Accounting |
+
+None of these are entered in Well Watch. If a record is wrong, fix it in the system it came from.
+
+What **engineers** do in the app:
+- write **notes**;
+- mark flags as **being handled** (who is handling it, and when to follow up);
+- add **fix cost estimates**;
+- keep **custom fields** for values the systems don't carry;
+- set their own **flag rules**.
 
 ---
 
@@ -87,8 +115,11 @@ Safety always comes first. A gas leak matters more than a well losing $7,000 a d
   - small chips showing the values that triggered it;
   - a suggested next step.
 - **Links under each flag:**
-  - **mark as being handled:** takes it off your list until a date you choose. It comes back sooner if it gets more than 10% worse than when you marked it, or if a new related record appears (for example, another alarm). Safety flags need a note on who is handling it.
+  - **mark as being handled:** say **who is handling it** and a **follow-up date**. It leaves your list until then, and comes back sooner if it gets more than 10% worse than when you marked it, or if a new related record appears (for example, another alarm). Safety flags also need a note on how it's being handled.
   - **add fix cost estimate:** enter what you think the fix will cost. This improves the payback ranking.
+  - **add note:** attach context to this flag. It appears under the flag, marked 📝.
+
+![Mark as being handled](images/11_mark_handled.png)
 - **Buttons:**
   - **Open well:** opens the well page.
   - **Ask why:** sends the question to the assistant.
@@ -116,6 +147,19 @@ This is the most important part of the page. For each problem it shows:
 
 A green box means nothing is flagged.
 
+### Notes
+
+Notes are where engineers keep the context the systems don't have: what the field told you, what is booked, what you are waiting for. Click **+ add note**. You can attach a note to the well in general or to one flag.
+
+![Notes](images/10_notes.png)
+
+If the note reports something that **isn't in the official system yet**, tick *"This reports a test or event that isn't in the official system yet"*. Then pick which test or event, and the date it should appear by. For example: *"Field says the safety valve test was done this morning"*. The note then shows:
+- **amber "waiting for the … record"** until the matching record arrives;
+- **green "✓ confirmed by the official record"** once it does, with a link to the record;
+- **red "not in the system yet"** if the date passes without it. The well also gets a *Field report not confirmed* reminder on the watch list, so nothing reported verbally gets lost.
+
+Notes are not official records, and the assistant treats them as context. **archive** hides a note when it's no longer useful.
+
 ### Boxes and charts
 
 The **Safety** and **Production** sections show the well's key numbers as boxes and charts. Anything behind a flag has a **red border** and a **⚑ why it's flagged** label, and those charts are moved to the front.
@@ -134,12 +178,11 @@ Hover to see a value. Click any point to trace it to the raw file.
 
 - **Status** is the column to read: **✓ OK** (green), **Due in N d** (amber), **N d overdue** or **✗ Failed** (red). Problems are listed first.
 - **Safety-critical** (grey label) means the test must not be missed or failed. **It says nothing about the result.** A safety-critical test that passed is good.
-- **Recorded in:** "system" means the test came from the company's compliance system; otherwise it shows who logged it in the app.
-- **+ log one:** record a test that was just done.
+- **Source:** the system the record came from (the maintenance / integrity system). To correct a record, fix it there.
 
 ### Safety events
 
-These are incidents such as emergency shutdowns, gas alarms, spills, releases and regulator findings. Open ones show a red **Open** tag. Click **update** to close one or record that it was reported to the regulator.
+These are incidents such as emergency shutdowns, gas alarms, spills, releases and regulator findings, from the HSE incident system. Open ones show a red **Open** tag. They close, or get marked as reported, when the HSE team updates them in that system.
 
 ---
 
@@ -173,14 +216,9 @@ This tab gathers the safety picture across all your wells:
 - tests due in the next 30 days;
 - events closed in the last 30 days.
 
-**Buttons at the top:**
-- **+ Log a test or inspection:** pick a well and a test type, or type a new type. Enter the date, result and how often it is required. The list and flags update straight away.
-- **+ Log a safety event:** pick a category, or type a new one. Enter the date, whether it is open, the volume, and whether it is reportable to and reported to the regulator.
-- **Custom fields:** add your own per-well value, such as "Annulus B limit (psi)" or "Near a school (yes/no)". Then fill it in for each well. It appears in the rule editor, so you can flag on it.
+It is **read-only**. Tests come from the maintenance / integrity system and incidents from the HSE incident system, both recorded by field and safety staff. To correct a record, fix it in that system. To add context, write a **note** on the well.
 
-Between these three, anything you need to track can be tracked, even if the data feeds don't include it.
-
----
+**Custom fields** (button at the top right) are for per-well values none of the systems carry, such as "Annulus B limit (psi)" or "Near a school (yes/no)". Add the field, fill it in for each well, and it appears in the rule editor so you can flag on it.
 
 ## Flag rules
 
@@ -262,6 +300,10 @@ Type a question in plain English. Good examples:
 | Amber **Due in N d** / **OK · monitor** | Coming up soon, or a known minor issue being watched |
 | Red **N d overdue** / **✗ Failed** / **Open** | Needs action |
 | Red border, **⚑ why it's flagged** | This box or chart is behind the flag |
+| 📝 with an amber "waiting for…" | A note reporting something the official system doesn't show yet |
+| Green "✓ confirmed by the official record" | The record a note was waiting for has arrived |
+| Red "not in the system yet" | A note's expected date passed without the record; the well gets a reminder |
+| Amber ⚠ in the data bar | A source system is late; its numbers may be out of date |
 | Red cell in a trace | This value crossed the rule's limit |
 | **GOLD / SILVER / BRONZE** | Finished / cleaned / as-received data |
 
@@ -307,7 +349,8 @@ The assistant can also define these: ask "What does ___ mean?"
 3. **Click 'show the readings behind this':** "Every number traces back to the raw file. The red cells are the readings that crossed the limit."
 4. **Ask the data:** type "Are there any safety issues on my wells?" Point at the [E] chips, the green check, and the Sources links.
 5. **Flag rules → open a rule:** "Engineers set their own rules. The preview shows which wells a rule would catch before you save it."
-6. **Mark a flag as being handled:** "Once a fix is booked, it leaves the list, and comes back on its own if things get worse."
+6. **Mark a flag as being handled:** "Once someone is on it, the engineer records who and when to follow up. It leaves the list, and comes back on its own if things get worse."
+7. **Add a note:** "If the field says a test was done but it isn't in the system yet, the engineer notes it. The app confirms it automatically when the record arrives, or reminds them if it doesn't."
 
 ---
 
@@ -319,7 +362,9 @@ The assistant can also define these: ask "What does ___ mean?"
 
 **Who sees my changes?**
 - **Your own:** rules and ranking settings are per engineer.
-- **Shared by everyone:** logged tests and events, event updates, custom fields, "being handled" marks and fix estimates. Each is recorded with the name of the person who made it.
+- **Shared by everyone:** notes, custom fields, "being handled" marks and fix estimates. Each is recorded with the name of the person who made it.
+
+**Why can't I enter a test result or an incident?** In practice those are recorded by field and safety staff in the maintenance and HSE systems, which are the official record. Entering them here too would create two versions of the truth. Use a note ("field says it was done") instead; the app confirms it when the official record arrives.
 
 **Are the limits real regulations?** No. The starter thresholds and fix costs are reasonable placeholders for a demo, for example H2S at 10 ppm, 80% of MAASP, 90% of MAOP, and a $90,000 pump change. A real company would set them from its regulator's rules and its own procedures.
 

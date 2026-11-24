@@ -27,7 +27,12 @@
       const v = (attrs[w.well_id] || {})[c.field_key];
       w['x_' + c.field_key] = v === undefined || v === null || v === '' ? null : types[c.field_key] === 'number' ? Number(v) : types[c.field_key] === 'yesno' ? v === 'true' : v;
     }
-    D.attrs = attrs; ITEMS = D.items; D.settings = D.settings || {}; D.acks = D.acks || []; D.estimates = D.estimates || [];
+    D.attrs = attrs; ITEMS = D.items; D.settings = D.settings || {}; D.acks = D.acks || []; D.estimates = D.estimates || []; D.notes = D.notes || [];
+    // notes that report a test or event not yet in the source system: confirmed when a matching record arrives, overdue after expected_by
+    for (const n of D.notes) n.state = noteState(n);
+    const byWell = {}; for (const n of D.notes) (byWell[n.well_id] = byWell[n.well_id] || []).push(n);
+    for (const w of D.snapshot) { const ns = byWell[w.well_id] || [];
+      w.notes_count = ns.length; w.pending_reports = ns.filter(n => n.state.s === 'waiting').length; w.unconfirmed_reports = ns.filter(n => n.state.s === 'overdue').length; }
   }
   async function init() {
     try { await loadBundle(); } catch (e) { $('#main').innerHTML = `<div class="empty">Could not load data: ${esc(e.message)}</div>`; return; }
@@ -75,7 +80,23 @@
   const myIds = () => new Set(myWells().map(w => w.well_id));
   const engName = () => (D.engineers.find(e => e.engineer_id === ENG) || {}).engineer_name;
   function go(v) { view = v; try { history.replaceState(null, '', '#' + v); } catch (e) {} render(); }
+  // How current each source system is (gold_source_freshness). Amber when a source is older than it should be.
+  function renderFreshness() {
+    const now = new Date(D.now + 'Z');
+    const rows = (D.freshness || []).map(f => { const age = (now - new Date(String(f.last_received).replace(' ', 'T') + (String(f.last_received).endsWith('Z') ? '' : 'Z'))) / 3600000;
+      return Object.assign({}, f, {stale: age > Number(f.stale_after_hours), age}); });
+    const short = {'SCADA production': 'Production', 'SCADA safety readings': 'Safety readings', 'Maintenance / integrity system': 'Tests', 'HSE incident system': 'Incidents', 'Field downtime log': 'Downtime', 'Accounting': 'Costs'};
+    const md = d => { const x = new Date(String(d).slice(0, 10) + 'T00:00:00Z'); return x.toLocaleDateString('en-US', {month: 'short', day: 'numeric', timeZone: 'UTC'}); };
+    $('#fresh').innerHTML = `<span class="muted">Data:</span> ${rows.map(f => `<span class="fr ${f.stale ? 'stale' : ''}" title="${esc(f.source)}: ${esc(f.provides)}. Data through ${esc(String(f.data_through).slice(0, 10))}; last received ${esc(String(f.last_received).slice(0, 16).replace('T', ' '))}.">${f.stale ? '⚠' : '●'} ${esc(short[f.source] || f.source)} ${/Maintenance|HSE/.test(f.source) ? 'updated ' + md(f.last_received) : 'through ' + md(f.data_through)}</span>`).join('')}
+      <a class="lk" id="freshmore">details</a>`;
+    $('#freshmore').onclick = () => showModal(`<div class="mhead"><h2>Where the data comes from</h2><button class="btn sec close" id="mx">Close</button></div><div class="mbody">
+      <div class="note">Each source system sends its data on a schedule. A source turns amber when its last delivery is older than expected, so numbers from it may be out of date.</div>
+      <table><thead><tr><th>Source system</th><th>Provides</th><th>Data through</th><th>Last received</th><th>Status</th></tr></thead><tbody>${rows.map(f => `<tr><td><b>${esc(f.source)}</b></td><td>${esc(f.provides)}</td>
+        <td>${esc(String(f.data_through).slice(0, 10))}</td><td>${esc(String(f.last_received).slice(0, 16).replace('T', ' '))}</td>
+        <td>${f.stale ? `<span class="pill warn">late (${fmt(f.age, 0)} h old, expected within ${fmt(f.stale_after_hours)} h)</span>` : '<span class="pill ok">on time</span>'}</td></tr>`).join('')}</tbody></table></div>`);
+  }
   function render() {
+    renderFreshness();
     document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
     const ids = myIds();
     $('#c-day').textContent = Math.min(10, ACTIVE().length); $('#c-wells').textContent = ids.size; $('#c-rules').textContent = RULES.filter(r => r.enabled).length;
@@ -89,6 +110,42 @@
   }
   const itemLin = it => it.record_id ? {kind: 'test', bronze_id: it.record_id, focus_well: it.well_id} : it.event_id ? {kind: 'safety_event', bronze_id: it.event_id, focus_well: it.well_id} : null;
   let DRAWER_WELL = null;
+  function noteState(n) {
+    if (!n.pending_kind) return {s: 'note'};
+    const since = String(n.created_at).slice(0, 10), want = String(n.pending_type || '').trim().toLowerCase();
+    const match = n.pending_kind === 'test'
+      ? ITEMS.test.find(t => t.well_id === n.well_id && String(t.test_type).toLowerCase() === want && String(t.last_test_date).slice(0, 10) >= since)
+      : ITEMS.event.find(e => e.well_id === n.well_id && String(e.category).toLowerCase() === want && String(e.event_date).slice(0, 10) >= since);
+    if (match) return {s: 'confirmed', rec: match};
+    return {s: String(n.expected_by).slice(0, 10) < D.today ? 'overdue' : 'waiting'};
+  }
+  const noteBadge = n => ({note: '', waiting: `<span class="pill warn">waiting for the ${esc(n.pending_type)} record · expected by ${esc(String(n.expected_by).slice(0, 10))}</span>`,
+    overdue: `<span class="pill crit">not in the ${n.pending_kind === 'test' ? 'maintenance' : 'HSE'} system yet · was expected by ${esc(String(n.expected_by).slice(0, 10))}</span>`,
+    confirmed: `<span class="pill ok">✓ confirmed by the official record</span>`})[n.state.s];
+  const noteHtml = (n, withArchive) => `<div class="noteitem"><div>${esc(n.body)}</div>
+    <div class="muted small">${esc(n.created_by || '')} · ${esc(String(n.created_at).slice(0, 16).replace('T', ' '))}${n.rule_id ? ` · on "${esc((RULES.find(r => r.id === n.rule_id) || {}).name || n.rule_id)}"` : ''} ${noteBadge(n)}
+      ${n.state.rec ? `<a class="lk" ${lin(itemLin(n.state.rec))}>see record</a>` : ''}${withArchive ? ` · <a class="lk" data-arch="${n.note_id}">archive</a>` : ''}</div></div>`;
+  function noteForm(p) {
+    const w = D.snapshot.find(x => x.well_id === p.well_id), r = RANK.find(x => x.well_id === p.well_id);
+    const testTypes = [...new Set(D.test_catalog.map(c => c.test_type).concat(ITEMS.test.filter(t => t.well_id === p.well_id).map(t => t.test_type)))];
+    const cats = ['ESD trip', 'PSV lift', 'H2S alarm', 'Gas detector alarm', 'Spill', 'Gas release', 'Flowline failure', 'Fire', 'Electrical fault', 'Regulator non-compliance', 'Near miss'];
+    formModal(`Add a note on ${p.well_id} · ${w.well_name}`, `<div class="note">Notes are context for you and other engineers (and the assistant). They are not official records: tests belong in the maintenance system and incidents in the HSE system.</div>
+      <div class="frm"><div class="full"><label>Note</label><textarea id="n-body" placeholder="e.g. Operator says the H2S monitor has been glitchy since the cold snap; replacement sensor ordered">${esc(p.body || '')}</textarea></div>
+      <div class="full"><label>About a flag (optional)</label><select id="n-rule"><option value="">The well in general</option>${(r ? r.flags : []).map(f => `<option value="${f.rule_id}" ${f.rule_id === p.rule_id ? 'selected' : ''}>${esc(f.rule_name)}</option>`).join('')}</select></div>
+      <div class="full"><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="n-pend"> This reports a test or event that isn't in the official system yet</label></div>
+      <div id="n-pendbox" hidden style="grid-column:1/3"><div class="frm">
+        <div><label>Waiting for a</label><select id="n-kind"><option value="test">test or inspection</option><option value="event">safety event</option></select></div>
+        <div><label>Which one</label><input id="n-type" list="n-types" placeholder="e.g. Subsurface safety valve test"><datalist id="n-types">${testTypes.map(t => `<option value="${esc(t)}">`).join('')}</datalist></div>
+        <div><label>Should be in the system by</label><input id="n-exp" type="date" value="${addDays(D.today, 3)}" min="${D.today}"></div>
+        <div class="note" style="align-self:end">It is confirmed automatically when the matching record arrives. If it hasn't by this date, the well gets a reminder flag.</div></div></div></div>`, async () => {
+        const pend = $('#n-pend').checked;
+        await post('api/notes', {engineer_id: ENG, well_id: p.well_id, rule_id: val('n-rule') || null, body: val('n-body'),
+          pending_kind: pend ? val('n-kind') : null, pending_type: pend ? val('n-type') : null, expected_by: pend ? val('n-exp') : null});
+        $('#modal').hidden = true; await refresh('Note added'); if (DRAWER_WELL === p.well_id) openWell(p.well_id);
+      });
+    $('#n-pend').onchange = e => { $('#n-pendbox').hidden = !e.target.checked; };
+    $('#n-kind').onchange = e => { $('#n-types').innerHTML = (e.target.value === 'test' ? testTypes : cats).map(t => `<option value="${esc(t)}">`).join(''); $('#n-type').value = ''; };
+  }
   // Test status: red only when something is wrong. "Safety-critical" is a neutral label about the test's importance, not its result.
   const SC_LABEL = '<span class="sclabel" title="A test that must not be missed or failed. Says nothing about the result.">Safety-critical</span>';
   const testState = t => ['Fail', 'Serious'].includes(t.last_result) ? 0 : t.overdue ? 1 : t.days_until_due <= 30 ? 2 : t.last_result === 'Non-serious' ? 3 : 4;
@@ -191,11 +248,13 @@
     const h = f.handled, meta = [];
     if (!h) meta.push(`${f.weight} pts${f.counted === false ? ` <span class="muted">(not added: counted once with "${esc(f.counted_with)}")</span>` : ''}`);
     if (!h && f.fix_cost !== null && f.fix_cost !== undefined) meta.push(`fix ≈ $${fmt(f.fix_cost)} <span class="muted">(${esc(f.fix_cost_source)})</span>`);
-    const acts = h ? (h.type === 'ack' ? `<a class="lk" data-unack='${key}'>no longer being handled</a>` : '')
-      : `<a class="lk" data-ack='${key}'>mark as being handled</a>${!f.safety ? ` · <a class="lk" data-est='${key}'>${EST[f.well_id + '|' + f.rule_id] !== undefined ? 'change' : 'add'} fix cost estimate</a>` : ''}`;
+    const acts = (h ? (h.type === 'ack' ? `<a class="lk" data-unack='${key}'>no longer being handled</a>` : '')
+      : `<a class="lk" data-ack='${key}'>mark as being handled</a>${!f.safety ? ` · <a class="lk" data-est='${key}'>${EST[f.well_id + '|' + f.rule_id] !== undefined ? 'change' : 'add'} fix cost estimate</a>` : ''}`) + ` · <a class="lk" data-note='${key}'>add note</a>`;
+    const fnotes = D.notes.filter(n => n.well_id === f.well_id && n.rule_id === f.rule_id);
     return `<div class="flag" style="${h ? 'opacity:.6' : ''}"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? '<span class="shield">SAFETY</span>' : ''}${f.resurfaced ? '<span class="shield" style="background:#c9822b">BACK</span>' : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}</div>
       ${f.resurfaced ? `<div class="act" style="color:#8a5a10">Back on the list: ${esc(f.resurfaced)}.</div>` : ''}
-      ${h ? `<div class="act"><b>Being handled</b>${h.type === 'ack' ? ` until ${esc(String(h.until).slice(0, 10))} by ${esc(h.by || '')}` : ' (open work order)'}${h.note ? ` · ${esc(h.note)}` : ''}</div>` : ''}
+      ${h ? `<div class="act"><b>Being handled</b>${h.type === 'ack' ? `${h.owner ? ` by <b>${esc(h.owner)}</b>` : ''} · follow up by ${esc(String(h.until).slice(0, 10))} <span class="muted">(marked by ${esc(h.by || '')})</span>` : ' (open work order)'}${h.note ? ` · ${esc(h.note)}` : ''}</div>` : ''}
+      ${fnotes.length ? `<div class="act">${fnotes.map(n => `📝 ${esc(n.body)} <span class="muted">— ${esc(n.created_by || '')}</span> ${noteBadge(n)}`).join('<br>')}</div>` : ''}
       <div class="chips">${chips}</div>${f.action && !h ? `<div class="act">Next step: ${esc(f.action)}</div>` : ''}
       <div class="act small">${meta.join(' · ')}${meta.length ? ' · ' : ''}${acts}</div></div>`;
   }
@@ -211,6 +270,7 @@
         <div class="meta">${esc(w.reservoir)} · ${esc(w.lift_type)} · ${esc(w.area)} · ${esc(w.sour_class || '')} · ${fmt(w.oil_7d_bopd, 1)} bbl/d vs ${fmt(w.target_7d_bopd, 1)} type curve${Number(w.open_work_orders) > 0 ? ` · open work order: ${esc(w.open_work_order)}` : ''}</div></div>
       <div class="side">${side}</div>
       ${r.flags.map(flagHtml).join('')}
+      ${(() => { const gen = D.notes.filter(n => n.well_id === w.well_id && !n.rule_id); return gen.length ? `<div class="flag"><span></span><div class="act">📝 ${esc(gen[0].body)} <span class="muted">— ${esc(gen[0].created_by || '')}</span>${gen.length > 1 ? ` <span class="muted">(+${gen.length - 1} more note${gen.length > 2 ? 's' : ''})</span>` : ''}</div></div>` : ''; })()}
       <div class="wactions"><button class="btn sec small" data-well="${w.well_id}">Open well</button><button class="btn sec small" data-ask="${w.well_id}">Ask why</button>
         <button class="btn sec small" data-trace-snap="${w.well_id}" data-cat="${esc(r.flags[0].category)}">Trace these numbers</button></div></div>`;
   }
@@ -220,15 +280,18 @@
     root.querySelectorAll('[data-unack]').forEach(a => a.onclick = async e => { e.stopPropagation(); const {f} = find(a.dataset.unack);
       await post('api/acks', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, cleared: true}); await refresh('Back on the list'); });
     root.querySelectorAll('[data-est]').forEach(a => a.onclick = e => { e.stopPropagation(); estForm(find(a.dataset.est)); });
+    root.querySelectorAll('[data-note]').forEach(a => a.onclick = e => { e.stopPropagation(); const {w, r} = JSON.parse(a.dataset.note); noteForm({well_id: w, rule_id: r}); });
   }
   const addDays = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
   function ackForm({rk, f, rule}) {
     const wo = Number(rk.fact.open_work_orders) > 0 ? rk.fact.open_work_order : '';
-    formModal(`Mark as being handled: ${f.rule_name} on ${f.well_id}`, `<div class="note">It leaves the list until the date below. It comes back sooner if it gets worse${f.items ? ' (a new matching record appears)' : ' (a condition moves more than 10% further past its threshold)'}.${f.safety ? ' <b>Safety flag: a note on who is handling it and how is required.</b>' : ''}</div>
-      <div class="frm"><div><label>Until</label><input id="a-until" type="date" min="${D.today}" max="${addDays(D.today, 30)}" value="${addDays(D.today, 7)}"></div><div></div>
+    formModal(`Mark as being handled: ${f.rule_name} on ${f.well_id}`, `<div class="note">It leaves the list until the follow-up date. It comes back sooner if it gets worse${f.items ? ' (a new matching record appears)' : ' (a condition moves more than 10% further past its threshold)'}.${f.safety ? ' <b>Safety flag: a note on who is handling it and how is required.</b>' : ''}</div>
+      <div class="frm"><div><label>Who is handling it</label><input id="a-owner" list="a-owners" placeholder="e.g. Field ops (North), Integrity team"><datalist id="a-owners">${['Field ops', 'Production engineer', 'Integrity team', 'HSE', 'Maintenance', 'Service rig contractor', 'Electrician'].map(o => `<option value="${o}">`).join('')}</datalist></div>
+      <div><label>Follow up by</label><input id="a-until" type="date" min="${D.today}" max="${addDays(D.today, 30)}" value="${addDays(D.today, 7)}"></div>
       <div class="full"><label>Note${f.safety ? ' (required)' : ''}</label><textarea id="a-note" placeholder="e.g. Pump change booked for Nov 26, Rig 4">${esc(wo ? 'Open work order ' + wo : '')}</textarea></div></div>`, async () => {
         if (f.safety && !val('a-note').trim()) throw new Error('Add a note on who is handling it and how.');
-        await post('api/acks', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, until_date: val('a-until'), note: val('a-note'), safety: !!f.safety, snapshot: F.ackSnapshot(f, rule, rk.fact)});
+        if (!val('a-owner').trim()) throw new Error('Say who is handling it.');
+        await post('api/acks', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, until_date: val('a-until'), note: val('a-note'), owner: val('a-owner'), safety: !!f.safety, snapshot: F.ackSnapshot(f, rule, rk.fact)});
         $('#modal').hidden = true; await refresh('Marked as being handled');
       });
   }
@@ -279,15 +342,14 @@
     const safeWells = RANK.filter(r => r.flags.some(f => F.isSafety(f) && !f.handled));
     const testRow = t => `<tr><td><a class="lk" data-well="${t.well_id}">${t.well_id}</a> <span class="muted small">${esc(name(t.well_id))}</span></td><td>${esc(t.test_type)} ${t.safety_critical ? SC_LABEL : ''}</td>
       <td>${esc(String(t.last_test_date).slice(0, 10))} · ${esc(t.last_result)}</td><td>${testStatus(t)}</td>
-      <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(t))}>trace</a> · <a class="lk" data-logtest='${esc(JSON.stringify({well_id: t.well_id, test_type: t.test_type, test_group: t.test_group, interval_months: t.interval_months, safety_critical: t.safety_critical}))}'>log result</a></td></tr>`;
+      <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(t))}>trace</a></td></tr>`;
     const evRow = e => `<tr><td>${esc(String(e.event_date).slice(0, 10))}</td><td><a class="lk" data-well="${e.well_id}">${e.well_id}</a></td><td><b>${esc(e.category)}</b><div class="muted small">${esc(e.description || '')}</div></td>
       <td>${e.reportable ? (e.reported_to_regulator ? '<span class="pill ok">reported</span>' : '<span class="pill crit">NOT reported</span>') : '<span class="muted small">not reportable</span>'}</td>
-      <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(e))}>trace</a>${e.status !== 'Closed' ? ` · <a class="lk" data-evupd="${e.event_id}">update</a>` : ''}</td></tr>`;
+      <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(e))}>trace</a></td></tr>`;
     const tblT = (head, rows, empty) => rows.length ? TEST_LEGEND.replace('margin:-4px 0 6px', 'margin:6px 12px') + tbl(head, rows, empty) : tbl(head, rows, empty);
     const tbl = (head, rows, empty) => rows.length ? `<div class="tw" style="max-height:320px;border:0"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : `<div class="muted small" style="padding:10px 12px">${empty}</div>`;
-    $('#main').innerHTML = `<div class="bar"><button class="btn" id="btest">+ Log a test or inspection</button><button class="btn" id="bevent">+ Log a safety event</button>
-        <button class="btn sec" id="bfields">Custom fields (${D.custom_fields.length})</button>
-        <span class="note">Anything not in the data feeds can be logged here or added as a custom field, then tracked with a rule on the Flag rules tab.</span></div>
+    $('#main').innerHTML = `<div class="bar"><span class="note" style="max-width:900px">Tests come from the <b>maintenance / integrity system</b> and incidents from the <b>HSE incident system</b>, recorded by field and safety staff. This tab is read-only: to correct a record, fix it in that system. To add context, write a <b>note</b> on the well; for a value the systems don't carry, add a <b>custom field</b>.</span>
+        <button class="btn sec" id="bfields" style="margin-left:auto">Custom fields (${D.custom_fields.length})</button></div>
       <div class="kpis six">
         <div class="kpi crit"><div class="n">${safeWells.filter(r => r.safety_worst === 'Critical').length}</div><div class="l">wells with a critical safety flag</div></div>
         <div class="kpi crit"><div class="n">${overdue.filter(t => t.safety_critical).length}</div><div class="l">safety-critical tests overdue</div></div>
@@ -305,9 +367,7 @@
         <div class="card"><h4>Due in the next 30 days <span class="muted small">${soon.length}</span></h4>${tblT(['Well', 'Test', 'Last done · result', 'Status', ''], soon.map(testRow), 'Nothing due soon.')}</div>
         <div class="card"><h4>Closed in the last 30 days <span class="muted small">${recent.length}</span></h4>${tbl(['Date', 'Well', 'Event', 'Regulator', ''], recent.map(evRow), 'None.')}</div>
       </div>`;
-    $('#btest').onclick = () => testForm({}); $('#bevent').onclick = () => eventForm({}); $('#bfields').onclick = fieldsManager;
-    document.querySelectorAll('[data-logtest]').forEach(a => a.onclick = () => testForm(JSON.parse(a.dataset.logtest)));
-    document.querySelectorAll('[data-evupd]').forEach(a => a.onclick = () => eventUpdate(a.dataset.evupd));
+    $('#bfields').onclick = fieldsManager;
     bindCommon($('#main'));
   }
   const wellOptions = sel => myWells().map(w => `<option value="${w.well_id}" ${w.well_id === sel ? 'selected' : ''}>${w.well_id} · ${esc(w.well_name)}</option>`).join('');
@@ -317,53 +377,6 @@
     $('#fsave').onclick = async () => { $('#fsave').disabled = true; try { await onSave(); } catch (e) { $('#ferr').textContent = e.message; $('#fsave').disabled = false; } };
   }
   const val = id => ($('#' + id) || {}).value;
-  function testForm(p) {
-    const cat = D.test_catalog;
-    formModal('Log a test or inspection', `<div class="frm">
-      <div><label>Well</label><select id="t-w">${wellOptions(p.well_id)}</select></div>
-      <div><label>Test / inspection type <span class="muted" style="font-weight:400">· pick one or type a new one</span></label><input id="t-type" list="t-types" value="${esc(p.test_type || '')}" placeholder="e.g. Subsurface safety valve test"><datalist id="t-types">${cat.map(c => `<option value="${esc(c.test_type)}">`).join('')}</datalist></div>
-      <div><label>Group</label><input id="t-grp" value="${esc(p.test_group || '')}" placeholder="Integrity, Pressure safety, Detection..."></div>
-      <div><label>Required every (months)</label><input id="t-int" value="${esc(p.interval_months || '')}"></div>
-      <div><label>Safety-critical</label><select id="t-crit"><option value="true" ${p.safety_critical ? 'selected' : ''}>Yes</option><option value="false" ${p.safety_critical === false ? 'selected' : ''}>No</option></select></div>
-      <div><label>Test date</label><input id="t-date" type="date" value="${D.as_of}"></div>
-      <div><label>Result</label><select id="t-res">${['Pass', 'Fail', 'Non-serious', 'Serious'].map(x => `<option>${x}</option>`).join('')}</select></div>
-      <div><label>Measured value (optional)</label><input id="t-val" placeholder="e.g. 12"></div>
-      <div><label>Unit</label><input id="t-unit" placeholder="e.g. m3/d, % wall loss, psi"></div>
-      <div class="full"><label>Notes</label><textarea id="t-notes"></textarea></div></div>`, async () => {
-        await post('api/tests', {well_id: val('t-w'), test_type: val('t-type'), test_group: val('t-grp'), interval_months: val('t-int'), safety_critical: val('t-crit') === 'true',
-          test_date: val('t-date'), result_status: val('t-res'), result_value: val('t-val'), result_unit: val('t-unit'), notes: val('t-notes')});
-        $('#modal').hidden = true; await refresh('Test logged');
-      });
-    $('#t-type').onchange = () => { const c = cat.find(x => x.test_type === val('t-type')); if (c) { $('#t-grp').value = c.test_group; $('#t-int').value = c.interval_months; $('#t-crit').value = String(c.safety_critical); } };
-  }
-  function eventForm(p) {
-    const cats = ['ESD trip', 'PSV lift', 'H2S alarm', 'Gas detector alarm', 'Spill', 'Gas release', 'Flowline failure', 'Fire', 'Electrical fault', 'Regulator non-compliance', 'Near miss'];
-    formModal('Log a safety event', `<div class="frm">
-      <div><label>Well</label><select id="e-w">${wellOptions(p.well_id)}</select></div>
-      <div><label>Category <span class="muted" style="font-weight:400">· pick one or type a new one</span></label><input id="e-cat" list="e-cats" placeholder="e.g. Spill"><datalist id="e-cats">${cats.map(c => `<option value="${c}">`).join('')}</datalist></div>
-      <div><label>Date</label><input id="e-date" type="date" value="${D.as_of}"></div>
-      <div><label>Status</label><select id="e-st"><option>Open</option><option>Closed</option></select></div>
-      <div><label>Planned activity</label><select id="e-pl"><option value="false">No</option><option value="true">Yes (e.g. function test)</option></select></div>
-      <div><label>Volume (m3, optional)</label><input id="e-vol"></div>
-      <div><label>Substance</label><input id="e-sub" placeholder="Produced water, emulsion, gas..."></div>
-      <div><label>Reportable to regulator</label><select id="e-rep"><option value="false">No</option><option value="true">Yes</option></select></div>
-      <div><label>Reported to regulator</label><select id="e-rtd"><option value="false">Not yet</option><option value="true">Yes</option></select></div>
-      <div class="full"><label>Description</label><textarea id="e-desc"></textarea></div></div>`, async () => {
-        await post('api/events', {well_id: val('e-w'), category: val('e-cat'), event_date: val('e-date'), status: val('e-st'), planned: val('e-pl') === 'true', volume_m3: val('e-vol'),
-          substance: val('e-sub'), reportable: val('e-rep') === 'true', reported_to_regulator: val('e-rtd') === 'true', description: val('e-desc')});
-        $('#modal').hidden = true; await refresh('Event logged');
-      });
-  }
-  function eventUpdate(id) {
-    const e = ITEMS.event.find(x => x.event_id === id);
-    formModal(`Update ${e.category} on ${e.well_id}`, `<div class="note">${esc(String(e.event_date).slice(0, 10))} · ${esc(e.description || '')}</div><div class="frm">
-      <div><label>Status</label><select id="u-st"><option ${e.status !== 'Closed' ? 'selected' : ''}>Open</option><option>Closed</option></select></div>
-      <div><label>Reported to regulator</label><select id="u-r"><option value="">${e.reportable ? 'no change' : 'not reportable'}</option><option value="true" ${e.reported_to_regulator ? 'selected' : ''}>Yes</option><option value="false">Not yet</option></select></div>
-      <div class="full"><label>Note</label><textarea id="u-n" placeholder="e.g. Cleanup complete, sampling passed; regulator ref #..."></textarea></div></div>`, async () => {
-        await post(`api/events/${id}/update`, {status: val('u-st'), reported_to_regulator: val('u-r') === '' ? null : val('u-r') === 'true', note: val('u-n')});
-        $('#modal').hidden = true; await refresh('Event updated');
-      });
-  }
   function fieldsManager() {
     const draw = () => {
       showModal(`<div class="mhead"><h2>Custom fields</h2><button class="btn sec close" id="mx">Close</button></div><div class="mbody">
@@ -425,6 +438,7 @@
       ['Venting this month', `${fmt(w.vent_mtd_m3)} / ${fmt(w.vent_limit_m3_month)} m3 (${fmt(w.vent_pct_of_limit, 0)}%)`], ['Tests', `${fmt(w.tests_overdue)} overdue · ${fmt(w.tests_due_30d)} due ≤30 d · ${fmt(w.failed_tests)} failed`]];
     const sd = d.safety_daily, prod = d.daily.map(x => ({date: x.prod_date, y: x.reported ? x.oil_bbl : null, y2: x.target_oil_bopd}));
     const myTests = ITEMS.test.filter(t => t.well_id === id).sort((a, b) => (testState(a) - testState(b)) || (a.days_until_due - b.days_until_due));
+    const myNotes = D.notes.filter(n => n.well_id === id);
     const myEvents = ITEMS.event.filter(e => e.well_id === id).sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
     // rule threshold drawn on each safety chart (red when it's why the well is flagged)
     const thr = (field, toUnits) => { const rl = RULES.find(x => x.enabled && (x.dataset || 'well') === 'well' && x.conditions.some(c => c.field === field && ['gt', 'gte'].includes(c.op)));
@@ -433,6 +447,8 @@
     const charts = (list) => list.map(([fields, html]) => [fields.some(f => alertF.has(f)), html]).sort((a, b) => b[0] - a[0]).map(x => x[1]).join('');
     $('#dbody').innerHTML = `
       ${whyBox(r, fx, d, id, sk.filter(([l]) => !boxAlert(l)).map(([l]) => l))}
+      <h3>Notes (${myNotes.length}) <a class="lk" id="dnote" style="text-transform:none;letter-spacing:0;margin-left:6px">+ add note</a></h3>
+      ${myNotes.length ? myNotes.map(n => noteHtml(n, true)).join('') : '<div class="muted small">No notes. Add context the systems don\'t have: what the field told you, what is booked, what you are waiting for.</div>'}
       <h3>Flags today ${r ? (r.tier === 'handled' ? '· all being handled' : `· ${r.tier} · rank #${ACTIVE().indexOf(r) + 1} · ${r.score} pts${r.tier === 'production' ? ` · $${fmt(r.value)}/day` : ''}`) : ''}</h3>
       ${r ? `<div style="display:grid;grid-template-columns:44px 1fr auto">${r.flags.map(flagHtml).join('')}</div>` : '<div class="muted">No flags from your rules.</div>'}
       <h3>Safety <a class="lk small" ${lin({kind: 'safety_snapshot', well_id: id})} style="text-transform:none;letter-spacing:0;margin-left:6px">trace →</a></h3>
@@ -444,17 +460,17 @@
           [['flowline_pct_of_maop', 'flowline_psi_max_7d'], chartBox('Flowline max vs MAOP (psi)', 'flp', sd.map(x => ({date: x.reading_date, y: x.flowline_psi_max, y2: x.flowline_maop_psi})), {l1: 'Flowline', l2: 'MAOP', kind: 'safety_daily', alert: alertF.has('flowline_pct_of_maop'), thresh: thr('flowline_pct_of_maop', pct => w.flowline_maop_psi * pct / 100)})],
           [['h2s_ambient_max_7d_ppm'], chartBox('H2S at surface, daily max (ppm)', 'h2s', sd.map(x => ({date: x.reading_date, y: x.h2s_ambient_ppm_max})), {kind: 'safety_daily', alert: alertF.has('h2s_ambient_max_7d_ppm'), thresh: thr('h2s_ambient_max_7d_ppm')})]])}
       </div>
-      <h3>Tests and inspections (${myTests.length}) <a class="lk" id="dlogt" style="text-transform:none;letter-spacing:0;margin-left:6px">+ log one</a></h3>
-      ${myTests.length ? TEST_LEGEND + `<div class="tw" style="max-height:280px"><table><thead><tr><th>Status</th><th>Test</th><th>Last done</th><th>Result</th><th>Next due</th><th>Recorded in</th><th></th></tr></thead><tbody>
+      <h3>Tests and inspections (${myTests.length}) <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· from the maintenance / integrity system</span></h3>
+      ${myTests.length ? TEST_LEGEND + `<div class="tw" style="max-height:280px"><table><thead><tr><th>Status</th><th>Test</th><th>Last done</th><th>Result</th><th>Next due</th><th>Source</th><th></th></tr></thead><tbody>
         ${myTests.map(t => `<tr><td>${testStatus(t)}</td><td>${esc(t.test_type)} ${t.safety_critical ? SC_LABEL : ''}</td><td>${esc(String(t.last_test_date).slice(0, 10))}</td>
           <td>${esc(t.last_result)}${t.result_value !== null && t.result_value !== undefined ? ` · ${esc(t.result_value)} ${esc(t.result_unit || '')}` : ''}</td>
           <td>${esc(String(t.next_due_date).slice(0, 10))}</td>
           <td class="muted small">${esc(t.source)}</td><td><a class="lk" ${lin(itemLin(t))}>trace</a></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">None.</div>'}
-      <h3>Safety events (${myEvents.length}) <a class="lk" id="dloge" style="text-transform:none;letter-spacing:0;margin-left:6px">+ log one</a></h3>
+      <h3>Safety events (${myEvents.length}) <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· from the HSE incident system</span></h3>
       ${myEvents.length ? `<div class="tw" style="max-height:240px"><table><thead><tr><th>Date</th><th>Category (AI)</th><th>As typed</th><th>Status</th><th>Regulator</th><th></th></tr></thead><tbody>
         ${myEvents.map(e => `<tr><td>${esc(String(e.event_date).slice(0, 10))}</td><td>${esc(e.category)}${e.planned ? ' <span class="muted small">(planned)</span>' : ''}</td><td class="muted">${esc(e.event_type_original)}: ${esc(e.description || '')}</td>
           <td>${e.status === 'Closed' ? 'Closed' : '<span class="pill crit">Open</span>'}</td><td>${e.reportable ? (e.reported_to_regulator ? 'reported' : '<b style="color:var(--crit)">not reported</b>') : '–'}</td>
-          <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(e))}>trace</a>${e.status !== 'Closed' ? ` · <a class="lk" data-evupd="${e.event_id}">update</a>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">None.</div>'}
+          <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(e))}>trace</a></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">None.</div>'}
       ${D.custom_fields.length ? `<h3>Custom fields <a class="lk" id="dcf" style="text-transform:none;letter-spacing:0;margin-left:6px">edit</a></h3><div class="kpis" style="grid-template-columns:repeat(4,1fr)">
         ${D.custom_fields.map(c => `<div class="kpi"><div class="n" style="font-size:14px">${esc(F.fmtVal('x_' + c.field_key, w['x_' + c.field_key]))}</div><div class="l">${esc(c.label)}</div></div>`).join('')}</div>` : ''}
       <h3>Production snapshot as of ${D.as_of} <a class="lk small" ${lin({kind: 'snapshot', well_id: id})} style="text-transform:none;letter-spacing:0;margin-left:6px">trace →</a></h3>
@@ -480,8 +496,8 @@
         ${d.work_orders.map(o => `<tr><td>${esc(o.wo_number)}</td><td>${esc(o.wo_type)}</td><td>${esc(o.description)}</td><td>${esc(o.start_date)}</td><td>${esc(o.end_date || '')}</td><td>${esc(o.status)}</td>
           <td><a class="lk" ${lin({kind: 'work_order', bronze_id: o._bronze_id})}>trace</a></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">None.</div>'}`;
     bindCommon($('#dbody')); bindFlagActions($('#dbody'));
-    $('#dlogt').onclick = () => testForm({well_id: id}); $('#dloge').onclick = () => eventForm({well_id: id});
-    document.querySelectorAll('#dbody [data-evupd]').forEach(a => a.onclick = () => eventUpdate(a.dataset.evupd));
+    $('#dnote').onclick = () => noteForm({well_id: id});
+    document.querySelectorAll('#dbody [data-arch]').forEach(a => a.onclick = async () => { await post(`api/notes/${a.dataset.arch}/archive`, {}); await refresh('Note archived'); openWell(id); });
     if ($('#dcf')) $('#dcf').onclick = () => editWellFields(id);
     bindCharts(id);
   }
