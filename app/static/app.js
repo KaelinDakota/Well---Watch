@@ -89,6 +89,12 @@
   }
   const itemLin = it => it.record_id ? {kind: 'test', bronze_id: it.record_id, focus_well: it.well_id} : it.event_id ? {kind: 'safety_event', bronze_id: it.event_id, focus_well: it.well_id} : null;
   let DRAWER_WELL = null;
+  // Test status: red only when something is wrong. "Safety-critical" is a neutral label about the test's importance, not its result.
+  const SC_LABEL = '<span class="sclabel" title="A test that must not be missed or failed. Says nothing about the result.">Safety-critical</span>';
+  const testState = t => ['Fail', 'Serious'].includes(t.last_result) ? 0 : t.overdue ? 1 : t.days_until_due <= 30 ? 2 : t.last_result === 'Non-serious' ? 3 : 4;
+  const testStatus = t => ({0: `<span class="pill crit">✗ ${t.last_result === 'Serious' ? 'Serious result' : 'Failed'}</span>`, 1: `<span class="pill crit">${t.days_overdue} d overdue</span>`,
+    2: `<span class="pill warn">Due in ${t.days_until_due} d</span>`, 3: '<span class="pill warn">OK · monitor</span>', 4: '<span class="pill ok">✓ OK</span>'})[testState(t)];
+  const TEST_LEGEND = '<div class="note" style="margin:-4px 0 6px"><span class="sclabel">Safety-critical</span> means the test must not be missed or failed. It says nothing about the result. The Status column shows how the well is doing: <span class="pill ok">✓ OK</span> <span class="pill warn">due soon</span> <span class="pill crit">overdue or failed</span></div>';
 
   // ---------------- "Look here first": what to highlight when tracing a flagged well ----------------
   // A rule condition is on a snapshot/test/event field; the same quantity appears under other column names in the daily
@@ -271,12 +277,13 @@
     const open = events.filter(e => e.status !== 'Closed').sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
     const recent = events.filter(e => e.days_ago <= 30 && e.status === 'Closed').sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
     const safeWells = RANK.filter(r => r.flags.some(f => F.isSafety(f) && !f.handled));
-    const testRow = t => `<tr><td><a class="lk" data-well="${t.well_id}">${t.well_id}</a> <span class="muted small">${esc(name(t.well_id))}</span></td><td>${t.safety_critical ? '<span class="shield">CRITICAL</span>' : ''}${esc(t.test_type)}</td>
-      <td>${esc(String(t.last_test_date).slice(0, 10))} · ${esc(t.last_result)}</td><td class="n">${t.overdue ? `<b style="color:var(--crit)">${t.days_overdue} d overdue</b>` : `in ${t.days_until_due} d`}</td>
+    const testRow = t => `<tr><td><a class="lk" data-well="${t.well_id}">${t.well_id}</a> <span class="muted small">${esc(name(t.well_id))}</span></td><td>${esc(t.test_type)} ${t.safety_critical ? SC_LABEL : ''}</td>
+      <td>${esc(String(t.last_test_date).slice(0, 10))} · ${esc(t.last_result)}</td><td>${testStatus(t)}</td>
       <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(t))}>trace</a> · <a class="lk" data-logtest='${esc(JSON.stringify({well_id: t.well_id, test_type: t.test_type, test_group: t.test_group, interval_months: t.interval_months, safety_critical: t.safety_critical}))}'>log result</a></td></tr>`;
     const evRow = e => `<tr><td>${esc(String(e.event_date).slice(0, 10))}</td><td><a class="lk" data-well="${e.well_id}">${e.well_id}</a></td><td><b>${esc(e.category)}</b><div class="muted small">${esc(e.description || '')}</div></td>
       <td>${e.reportable ? (e.reported_to_regulator ? '<span class="pill ok">reported</span>' : '<span class="pill crit">NOT reported</span>') : '<span class="muted small">not reportable</span>'}</td>
       <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(e))}>trace</a>${e.status !== 'Closed' ? ` · <a class="lk" data-evupd="${e.event_id}">update</a>` : ''}</td></tr>`;
+    const tblT = (head, rows, empty) => rows.length ? TEST_LEGEND.replace('margin:-4px 0 6px', 'margin:6px 12px') + tbl(head, rows, empty) : tbl(head, rows, empty);
     const tbl = (head, rows, empty) => rows.length ? `<div class="tw" style="max-height:320px;border:0"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : `<div class="muted small" style="padding:10px 12px">${empty}</div>`;
     $('#main').innerHTML = `<div class="bar"><button class="btn" id="btest">+ Log a test or inspection</button><button class="btn" id="bevent">+ Log a safety event</button>
         <button class="btn sec" id="bfields">Custom fields (${D.custom_fields.length})</button>
@@ -293,9 +300,9 @@
           ${tbl(['Well', 'Safety flags'], safeWells.map(r => `<tr><td><a class="lk" data-well="${r.well_id}">${r.well_id}</a><div class="muted small">${esc(r.fact.well_name)}</div></td>
             <td>${r.flags.filter(f => F.isSafety(f) && !f.handled).map(f => `<div><span class="sev ${f.severity}" style="display:inline-block;margin-right:6px">${f.severity}</span>${esc(f.rule_name)} <span class="muted small">· ${esc(f.message)}</span></div>`).join('')}</td></tr>`), 'No safety flags from your rules.')}</div>
         <div class="card"><h4>Open safety events <span class="muted small">${open.length}</span></h4>${tbl(['Date', 'Well', 'Event', 'Regulator', ''], open.map(evRow), 'No open events.')}</div>
-        <div class="card"><h4>Overdue tests and inspections <span class="muted small">${overdue.length}</span></h4>${tbl(['Well', 'Test', 'Last', 'Due', ''], overdue.map(testRow), 'Nothing overdue.')}</div>
-        <div class="card"><h4>Failed tests <span class="muted small">${failed.length}</span></h4>${tbl(['Well', 'Test', 'Last', 'Due', ''], failed.map(testRow), 'No failed tests.')}</div>
-        <div class="card"><h4>Due in the next 30 days <span class="muted small">${soon.length}</span></h4>${tbl(['Well', 'Test', 'Last', 'Due', ''], soon.map(testRow), 'Nothing due soon.')}</div>
+        <div class="card"><h4>Overdue tests and inspections <span class="muted small">${overdue.length}</span></h4>${tblT(['Well', 'Test', 'Last done · result', 'Status', ''], overdue.map(testRow), 'Nothing overdue.')}</div>
+        <div class="card"><h4>Failed tests <span class="muted small">${failed.length}</span></h4>${tblT(['Well', 'Test', 'Last done · result', 'Status', ''], failed.map(testRow), 'No failed tests.')}</div>
+        <div class="card"><h4>Due in the next 30 days <span class="muted small">${soon.length}</span></h4>${tblT(['Well', 'Test', 'Last done · result', 'Status', ''], soon.map(testRow), 'Nothing due soon.')}</div>
         <div class="card"><h4>Closed in the last 30 days <span class="muted small">${recent.length}</span></h4>${tbl(['Date', 'Well', 'Event', 'Regulator', ''], recent.map(evRow), 'None.')}</div>
       </div>`;
     $('#btest').onclick = () => testForm({}); $('#bevent').onclick = () => eventForm({}); $('#bfields').onclick = fieldsManager;
@@ -403,7 +410,7 @@
       ['H2S', `${fmt(w.h2s_ppm_gas)} ppm in gas · ${fmt(w.h2s_ambient_max_7d_ppm)} ppm at surface`], ['EPZ', w.epz_m ? `${fmt(w.epz_m)} m · ${fmt(w.residences_in_epz)} residences` : 'none (sweet)'],
       ['Venting this month', `${fmt(w.vent_mtd_m3)} / ${fmt(w.vent_limit_m3_month)} m3 (${fmt(w.vent_pct_of_limit, 0)}%)`], ['Tests', `${fmt(w.tests_overdue)} overdue · ${fmt(w.tests_due_30d)} due ≤30 d · ${fmt(w.failed_tests)} failed`]];
     const sd = d.safety_daily, prod = d.daily.map(x => ({date: x.prod_date, y: x.reported ? x.oil_bbl : null, y2: x.target_oil_bopd}));
-    const myTests = ITEMS.test.filter(t => t.well_id === id).sort((a, b) => a.days_until_due - b.days_until_due);
+    const myTests = ITEMS.test.filter(t => t.well_id === id).sort((a, b) => (testState(a) - testState(b)) || (a.days_until_due - b.days_until_due));
     const myEvents = ITEMS.event.filter(e => e.well_id === id).sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
     $('#dbody').innerHTML = `
       <h3>Flags today ${r ? (r.tier === 'handled' ? '· all being handled' : `· ${r.tier} · rank #${ACTIVE().indexOf(r) + 1} · ${r.score} pts${r.tier === 'production' ? ` · $${fmt(r.value)}/day` : ''}`) : ''}</h3>
@@ -417,10 +424,10 @@
         ${chartBox('H2S at surface, daily max (ppm)', 'h2s', sd.map(x => ({date: x.reading_date, y: x.h2s_ambient_ppm_max})), {kind: 'safety_daily'})}
       </div>
       <h3>Tests and inspections (${myTests.length}) <a class="lk" id="dlogt" style="text-transform:none;letter-spacing:0;margin-left:6px">+ log one</a></h3>
-      ${myTests.length ? `<div class="tw" style="max-height:280px"><table><thead><tr><th>Test</th><th>Last</th><th>Result</th><th>Next due</th><th>Recorded in</th><th></th></tr></thead><tbody>
-        ${myTests.map(t => `<tr><td>${t.safety_critical ? '<span class="shield">CRITICAL</span>' : ''}${esc(t.test_type)}</td><td>${esc(String(t.last_test_date).slice(0, 10))}</td>
+      ${myTests.length ? TEST_LEGEND + `<div class="tw" style="max-height:280px"><table><thead><tr><th>Status</th><th>Test</th><th>Last done</th><th>Result</th><th>Next due</th><th>Recorded in</th><th></th></tr></thead><tbody>
+        ${myTests.map(t => `<tr><td>${testStatus(t)}</td><td>${esc(t.test_type)} ${t.safety_critical ? SC_LABEL : ''}</td><td>${esc(String(t.last_test_date).slice(0, 10))}</td>
           <td>${esc(t.last_result)}${t.result_value !== null && t.result_value !== undefined ? ` · ${esc(t.result_value)} ${esc(t.result_unit || '')}` : ''}</td>
-          <td>${esc(String(t.next_due_date).slice(0, 10))} ${t.overdue ? `<span class="pill crit">${t.days_overdue} d overdue</span>` : t.days_until_due <= 30 ? `<span class="pill warn">in ${t.days_until_due} d</span>` : ''}</td>
+          <td>${esc(String(t.next_due_date).slice(0, 10))}</td>
           <td class="muted small">${esc(t.source)}</td><td><a class="lk" ${lin(itemLin(t))}>trace</a></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">None.</div>'}
       <h3>Safety events (${myEvents.length}) <a class="lk" id="dloge" style="text-transform:none;letter-spacing:0;margin-left:6px">+ log one</a></h3>
       ${myEvents.length ? `<div class="tw" style="max-height:240px"><table><thead><tr><th>Date</th><th>Category (AI)</th><th>As typed</th><th>Status</th><th>Regulator</th><th></th></tr></thead><tbody>
