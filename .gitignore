@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+.ridgeline/
+session*.json
+.DS_Store

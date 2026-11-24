@@ -1,0 +1,1648 @@
+[
+ {
+  "well_id": "W-001",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-002",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-003",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-004",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-005",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-006",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-007",
+  "engineer_id": "ENG-1",
+  "scenario": "S1",
+  "scenario_name": "ESP failure, well down",
+  "needs_attention": true,
+  "expected_flags": [
+   "WELL_DOWN_UNPLANNED"
+  ]
+ },
+ {
+  "well_id": "W-008",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-009",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-010",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-011",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-012",
+  "engineer_id": "ENG-1",
+  "scenario": "S10",
+  "scenario_name": "Planned facility turnaround (benign)",
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-013",
+  "engineer_id": "ENG-1",
+  "scenario": "S10",
+  "scenario_name": "Planned facility turnaround (benign)",
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-014",
+  "engineer_id": "ENG-1",
+  "scenario": "S10",
+  "scenario_name": "Planned facility turnaround (benign)",
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-015",
+  "engineer_id": "ENG-1",
+  "scenario": "S2",
+  "scenario_name": "Gradual underperformance vs type curve",
+  "needs_attention": true,
+  "expected_flags": [
+   "UNDER_TYPE_CURVE"
+  ]
+ },
+ {
+  "well_id": "W-016",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-017",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-018",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-019",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-020",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-021",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-022",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-023",
+  "engineer_id": "ENG-1",
+  "scenario": "S3",
+  "scenario_name": "Water breakthrough",
+  "needs_attention": true,
+  "expected_flags": [
+   "WATER_CUT_JUMP"
+  ]
+ },
+ {
+  "well_id": "W-024",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-025",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-026",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-027",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-028",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-029",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-030",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-031",
+  "engineer_id": "ENG-1",
+  "scenario": "S6",
+  "scenario_name": "Casing pressure rising (integrity)",
+  "needs_attention": true,
+  "expected_flags": [
+   "CASING_PRESSURE_RISING"
+  ]
+ },
+ {
+  "well_id": "W-032",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-033",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-034",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-035",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-036",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-037",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-038",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-039",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-040",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-041",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-042",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-043",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-044",
+  "engineer_id": "ENG-1",
+  "scenario": "S7",
+  "scenario_name": "Uneconomic: operating cost above netback",
+  "needs_attention": true,
+  "expected_flags": [
+   "NEGATIVE_MARGIN"
+  ]
+ },
+ {
+  "well_id": "W-045",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-046",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-047",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-048",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-049",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-050",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-051",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-052",
+  "engineer_id": "ENG-1",
+  "scenario": "S8",
+  "scenario_name": "SCADA communication gap (data stale)",
+  "needs_attention": true,
+  "expected_flags": [
+   "DATA_STALE"
+  ]
+ },
+ {
+  "well_id": "W-053",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-054",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-055",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-056",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-057",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-058",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-059",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-060",
+  "engineer_id": "ENG-1",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-061",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-062",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-063",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-064",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-065",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-066",
+  "engineer_id": "ENG-2",
+  "scenario": "S1",
+  "scenario_name": "ESP failure, well down",
+  "needs_attention": true,
+  "expected_flags": [
+   "WELL_DOWN_UNPLANNED"
+  ]
+ },
+ {
+  "well_id": "W-067",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-068",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-069",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-070",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-071",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-072",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-073",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-074",
+  "engineer_id": "ENG-2",
+  "scenario": "S5",
+  "scenario_name": "Chronic short downtime (rod pump)",
+  "needs_attention": true,
+  "expected_flags": [
+   "FREQUENT_DOWNTIME"
+  ]
+ },
+ {
+  "well_id": "W-075",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-076",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-077",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-078",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-079",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-080",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-081",
+  "engineer_id": "ENG-2",
+  "scenario": "S2",
+  "scenario_name": "Gradual underperformance vs type curve",
+  "needs_attention": true,
+  "expected_flags": [
+   "UNDER_TYPE_CURVE"
+  ]
+ },
+ {
+  "well_id": "W-082",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-083",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-084",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-085",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-086",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-087",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-088",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-089",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-090",
+  "engineer_id": "ENG-2",
+  "scenario": "S4",
+  "scenario_name": "Rising gas-oil ratio",
+  "needs_attention": true,
+  "expected_flags": [
+   "GOR_RISING"
+  ]
+ },
+ {
+  "well_id": "W-091",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-092",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-093",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-094",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-095",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-096",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-097",
+  "engineer_id": "ENG-2",
+  "scenario": "S3",
+  "scenario_name": "Water breakthrough",
+  "needs_attention": true,
+  "expected_flags": [
+   "WATER_CUT_JUMP"
+  ]
+ },
+ {
+  "well_id": "W-098",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-099",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-100",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-101",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-102",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-103",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-104",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-105",
+  "engineer_id": "ENG-2",
+  "scenario": "S7",
+  "scenario_name": "Uneconomic: operating cost above netback",
+  "needs_attention": true,
+  "expected_flags": [
+   "NEGATIVE_MARGIN"
+  ]
+ },
+ {
+  "well_id": "W-106",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-107",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-108",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-109",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-110",
+  "engineer_id": "ENG-2",
+  "scenario": "S9",
+  "scenario_name": "Back from workover, flush production (benign)",
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-111",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-112",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-113",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-114",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-115",
+  "engineer_id": "ENG-2",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-116",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-117",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-118",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-119",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-120",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-121",
+  "engineer_id": "ENG-3",
+  "scenario": "S2",
+  "scenario_name": "Gradual underperformance vs type curve",
+  "needs_attention": true,
+  "expected_flags": [
+   "UNDER_TYPE_CURVE"
+  ]
+ },
+ {
+  "well_id": "W-122",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-123",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-124",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-125",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-126",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-127",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-128",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-129",
+  "engineer_id": "ENG-3",
+  "scenario": "S5",
+  "scenario_name": "Chronic short downtime (rod pump)",
+  "needs_attention": true,
+  "expected_flags": [
+   "FREQUENT_DOWNTIME"
+  ]
+ },
+ {
+  "well_id": "W-130",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-131",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-132",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-133",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-134",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-135",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-136",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-137",
+  "engineer_id": "ENG-3",
+  "scenario": "S6",
+  "scenario_name": "Casing pressure rising (integrity)",
+  "needs_attention": true,
+  "expected_flags": [
+   "CASING_PRESSURE_RISING"
+  ]
+ },
+ {
+  "well_id": "W-138",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-139",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-140",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-141",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-142",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-143",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-144",
+  "engineer_id": "ENG-3",
+  "scenario": "S1",
+  "scenario_name": "ESP failure, well down",
+  "needs_attention": true,
+  "expected_flags": [
+   "WELL_DOWN_UNPLANNED"
+  ]
+ },
+ {
+  "well_id": "W-145",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-146",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-147",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-148",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-149",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-150",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-151",
+  "engineer_id": "ENG-3",
+  "scenario": "S8",
+  "scenario_name": "SCADA communication gap (data stale)",
+  "needs_attention": true,
+  "expected_flags": [
+   "DATA_STALE"
+  ]
+ },
+ {
+  "well_id": "W-152",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-153",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-154",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-155",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-156",
+  "engineer_id": "ENG-3",
+  "scenario": "S9",
+  "scenario_name": "Back from workover, flush production (benign)",
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-157",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-158",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-159",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-160",
+  "engineer_id": "ENG-3",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-161",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-162",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-163",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-164",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-165",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-166",
+  "engineer_id": "ENG-4",
+  "scenario": "S2",
+  "scenario_name": "Gradual underperformance vs type curve",
+  "needs_attention": true,
+  "expected_flags": [
+   "UNDER_TYPE_CURVE"
+  ]
+ },
+ {
+  "well_id": "W-167",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-168",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-169",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-170",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-171",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-172",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-173",
+  "engineer_id": "ENG-4",
+  "scenario": "S3",
+  "scenario_name": "Water breakthrough",
+  "needs_attention": true,
+  "expected_flags": [
+   "WATER_CUT_JUMP"
+  ]
+ },
+ {
+  "well_id": "W-174",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-175",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-176",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-177",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-178",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-179",
+  "engineer_id": "ENG-4",
+  "scenario": "S4",
+  "scenario_name": "Rising gas-oil ratio",
+  "needs_attention": true,
+  "expected_flags": [
+   "GOR_RISING"
+  ]
+ },
+ {
+  "well_id": "W-180",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-181",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-182",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-183",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-184",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-185",
+  "engineer_id": "ENG-4",
+  "scenario": "S5",
+  "scenario_name": "Chronic short downtime (rod pump)",
+  "needs_attention": true,
+  "expected_flags": [
+   "FREQUENT_DOWNTIME"
+  ]
+ },
+ {
+  "well_id": "W-186",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-187",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-188",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-189",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-190",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-191",
+  "engineer_id": "ENG-4",
+  "scenario": "S7",
+  "scenario_name": "Uneconomic: operating cost above netback",
+  "needs_attention": true,
+  "expected_flags": [
+   "NEGATIVE_MARGIN"
+  ]
+ },
+ {
+  "well_id": "W-192",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-193",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-194",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-195",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-196",
+  "engineer_id": "ENG-4",
+  "scenario": "S8",
+  "scenario_name": "SCADA communication gap (data stale)",
+  "needs_attention": true,
+  "expected_flags": [
+   "DATA_STALE"
+  ]
+ },
+ {
+  "well_id": "W-197",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-198",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-199",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ },
+ {
+  "well_id": "W-200",
+  "engineer_id": "ENG-4",
+  "scenario": null,
+  "scenario_name": null,
+  "needs_attention": false,
+  "expected_flags": []
+ }
+]

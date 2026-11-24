@@ -1,0 +1,201 @@
+well_id,uwi,well_name,pad,area,reservoir,lift_type,on_production_date
+W-001,100/02-02-046-06W5/00,Loon 2-2H,Loon,East,Viking,Rod pump,2025-06-01
+W-002,100/03-03-047-07W5/00,Rail 3-3H,Rail,West,Duvernay,ESP,2025-09-23
+W-003,100/04-04-048-05W5/00,Osprey 4-4H,Osprey,East,Viking,Rod pump,2022-08-21
+W-004,100/05-05-049-06W5/00,Falcon 5-5H,Falcon,East,Viking,Rod pump,2023-10-24
+W-005,100/06-06-050-07W5/00,Egret 6-6H,Egret,North,Montney,ESP,2024-01-23
+W-006,100/07-07-051-05W5/00,Egret 7-7H,Egret,East,Viking,Rod pump,2023-03-04
+W-007,100/08-08-052-06W5/00,Harrier 8-8H,Harrier,North,Montney,ESP,2024-10-10
+W-008,100/09-09-053-07W5/00,Heron 9-9H,Heron,North,Montney,ESP,2024-05-06
+W-009,100/10-10-045-05W5/00,Godwit 10-10H,Godwit,North,Montney,ESP,2024-03-25
+W-010,100/11-11-046-06W5/00,  RAIL 11-11H ,Rail,East,Viking,Rod pump,2023-08-23
+W-011,100/12-12-047-07W5/00,Snipe 12-12H,Snipe,West,Duvernay,Gas lift,2024-09-15
+W-012,100/13-13-048-05W5/00,Kestrel 13-13H,Kestrel,South,Cardium,Rod pump,2023-07-26
+W-013,100/14-14-049-06W5/00,Kestrel 14-14H,Kestrel,South,Cardium,Rod pump,2025-03-24
+W-014,100/15-15-050-07W5/00,Kestrel 15-15H,Kestrel,South,Cardium,Rod pump,2023-01-28
+W-015,100/16-16-051-05W5/00,Heron 16-16H,Heron,South,Cardium,Rod pump,2024-06-14
+W-016,100/01-17-052-06W5/00,Merlin 1-17H,Merlin,South,Cardium,Rod pump,2025-06-09
+W-017,100/02-18-053-07W5/00,  OSPREY 2-18H ,Osprey,North,Montney,ESP,2024-08-05
+W-018,100/03-19-045-05W5/00,Merlin 3-19H,Merlin,South,Cardium,Rod pump,2025-07-20
+W-019,100/04-20-046-06W5/00,Plover 4-20H,Plover,North,Montney,ESP,2025-02-28
+W-020,100/05-21-047-07W5/00,Snipe 5-21H,Snipe,West,Duvernay,ESP,2023-12-26
+W-021,100/06-22-048-05W5/00,Grebe 6-22H,Grebe,East,Viking,Rod pump,2022-08-22
+W-022,100/07-23-049-06W5/00,Curlew 7-23H,Curlew,North,Montney,ESP,2025-06-28
+W-023,100/08-24-050-07W5/00,Avocet 8-24H,Avocet,South,Cardium,Rod pump,2024-01-12
+W-024,100/09-25-051-05W5/00,Grebe 9-25H,Grebe,South,Cardium,Rod pump,2023-10-19
+W-025,100/10-26-052-06W5/00,Heron 10-26H,Heron,North,Montney,ESP,2024-11-15
+W-026,100/11-27-053-07W5/00,  HARRIER 11-27H ,Harrier,North,Montney,ESP,2023-12-10
+W-027,100/12-28-045-05W5/00,Shrike 12-28H,Shrike,East,Viking,Rod pump,2024-02-22
+W-028,100/13-29-046-06W5/00,Rail 13-29H,Rail,West,Duvernay,Gas lift,2025-10-30
+W-029,100/14-30-047-07W5/00,  GREBE 14-30H ,Grebe,West,Duvernay,ESP,2025-09-16
+W-030,100/15-01-048-05W5/00,Tern 15-1H,Tern,East,Viking,Rod pump,2024-09-12
+W-031,100/16-02-049-06W5/00,  KESTREL 16-2H ,Kestrel,East,Viking,Rod pump,2024-07-15
+W-032,100/01-03-050-07W5/00,Kestrel 1-3H,Kestrel,South,Cardium,Rod pump,2022-11-16
+W-033,100/02-04-051-05W5/00,Tern 2-4H,Tern,West,Duvernay,ESP,2024-09-27
+W-034,100/03-05-052-06W5/00,Falcon 3-5H,Falcon,North,Montney,ESP,2024-07-08
+W-035,100/04-06-053-07W5/00,Curlew 4-6H,Curlew,West,Duvernay,Gas lift,2024-10-25
+W-036,100/05-07-045-05W5/00,Avocet 5-7H,Avocet,North,Montney,ESP,2025-05-28
+W-037,100/06-08-046-06W5/00,Merlin 6-8H,Merlin,East,Viking,Rod pump,2023-10-15
+W-038,100/07-09-047-07W5/00,Ibis 7-9H,Ibis,North,Montney,ESP,2025-02-20
+W-039,100/08-10-048-05W5/00,Egret 8-10H,Egret,West,Duvernay,ESP,2024-06-15
+W-040,100/09-11-049-06W5/00,Egret 9-11H,Egret,South,Cardium,Rod pump,2025-10-05
+W-041,100/10-12-050-07W5/00,Ibis 10-12H,Ibis,East,Viking,Rod pump,2023-01-01
+W-042,100/11-13-051-05W5/00,Tern 11-13H,Tern,East,Viking,Rod pump,2024-09-26
+W-043,100/12-14-052-06W5/00,Avocet 12-14H,Avocet,West,Duvernay,ESP,2025-08-04
+W-044,100/13-15-053-07W5/00,Plover 13-15H,Plover,West,Duvernay,ESP,2025-01-27
+W-045,100/14-16-045-05W5/00,Tern 14-16H,Tern,West,Duvernay,ESP,2024-11-30
+W-046,100/15-17-046-06W5/00,Grebe 15-17H,Grebe,East,Viking,Rod pump,2025-07-02
+W-047,100/16-18-047-07W5/00,Osprey 16-18H,Osprey,North,Montney,ESP,2024-06-04
+W-048,100/01-19-048-05W5/00,Heron 1-19H,Heron,North,Montney,ESP,2024-09-22
+W-049,100/02-20-049-06W5/00,Grebe 2-20H,Grebe,East,Viking,Rod pump,2022-10-04
+W-050,100/03-21-050-07W5/00,Rail 3-21H,Rail,East,Viking,Rod pump,2025-08-19
+W-051,100/04-22-051-05W5/00,Falcon 4-22H,Falcon,West,Duvernay,ESP,2024-03-25
+W-052,100/05-23-052-06W5/00,Crane 5-23H,Crane,West,Duvernay,Gas lift,2024-07-11
+W-053,100/06-24-053-07W5/00,Plover 6-24H,Plover,North,Montney,ESP,2025-01-18
+W-054,100/07-25-045-05W5/00,  MERLIN 7-25H ,Merlin,West,Duvernay,ESP,2023-12-31
+W-055,100/08-26-046-06W5/00,Loon 8-26H,Loon,South,Cardium,Rod pump,2023-04-29
+W-056,100/09-27-047-07W5/00,Harrier 9-27H,Harrier,West,Duvernay,ESP,2024-06-22
+W-057,100/10-28-048-05W5/00,Dunlin 10-28H,Dunlin,West,Duvernay,Gas lift,2025-04-14
+W-058,100/11-29-049-06W5/00,Dunlin 11-29H,Dunlin,West,Duvernay,ESP,2024-02-01
+W-059,100/12-30-050-07W5/00,Godwit 12-30H,Godwit,West,Duvernay,Gas lift,2024-10-19
+W-060,100/13-01-051-05W5/00,Kestrel 13-1H,Kestrel,West,Duvernay,ESP,2024-02-11
+W-061,100/14-02-052-06W5/00,Avocet 14-2H,Avocet,East,Viking,Rod pump,2025-07-25
+W-062,100/15-03-053-07W5/00,Egret 15-3H,Egret,North,Montney,ESP,2024-07-06
+W-063,100/16-04-045-05W5/00,Merlin 16-4H,Merlin,North,Montney,ESP,2025-07-15
+W-064,100/01-05-046-06W5/00,Falcon 1-5H,Falcon,South,Cardium,Rod pump,2022-10-11
+W-065,100/02-06-047-07W5/00,Loon 2-6H,Loon,North,Montney,ESP,2024-05-23
+W-066,100/03-07-048-05W5/00,Godwit 3-7H,Godwit,North,Montney,ESP,2024-10-17
+W-067,100/04-08-049-06W5/00,Snipe 4-8H,Snipe,South,Cardium,Rod pump,2023-12-12
+W-068,100/05-09-050-07W5/00,Kestrel 5-9H,Kestrel,North,Montney,ESP,2025-03-04
+W-069,100/06-10-051-05W5/00,Egret 6-10H,Egret,East,Viking,Rod pump,2023-04-29
+W-070,100/07-11-052-06W5/00,Ibis 7-11H,Ibis,East,Viking,Rod pump,2023-09-10
+W-071,100/08-12-053-07W5/00,Merlin 8-12H,Merlin,North,Montney,ESP,2023-12-25
+W-072,100/09-13-045-05W5/00,Curlew 9-13H,Curlew,North,Montney,ESP,2025-12-08
+W-073,100/10-14-046-06W5/00,Tern 10-14H,Tern,East,Viking,Rod pump,2025-03-11
+W-074,100/11-15-047-07W5/00,Crane 11-15H,Crane,East,Viking,Rod pump,2024-08-27
+W-075,100/12-16-048-05W5/00,Avocet 12-16H,Avocet,North,Montney,ESP,2025-03-26
+W-076,100/13-17-049-06W5/00,Kestrel 13-17H,Kestrel,North,Montney,ESP,2024-09-16
+W-077,100/14-18-050-07W5/00,Snipe 14-18H,Snipe,West,Duvernay,ESP,2025-06-03
+W-078,100/15-19-051-05W5/00,Kestrel 15-19H,Kestrel,East,Viking,Rod pump,2022-10-04
+W-079,100/16-20-052-06W5/00,Falcon 16-20H,Falcon,South,Cardium,Rod pump,2023-08-30
+W-080,100/01-21-053-07W5/00,Godwit 1-21H,Godwit,West,Duvernay,ESP,2024-12-08
+W-081,100/02-22-045-05W5/00,Heron 2-22H,Heron,East,Viking,Rod pump,2025-06-26
+W-082,100/03-23-046-06W5/00,Curlew 3-23H,Curlew,South,Cardium,Rod pump,2024-11-20
+W-083,100/04-24-047-07W5/00,Plover 4-24H,Plover,West,Duvernay,Gas lift,2024-08-29
+W-084,100/05-25-048-05W5/00,Heron 5-25H,Heron,West,Duvernay,Gas lift,2025-07-22
+W-085,100/06-26-049-06W5/00,Falcon 6-26H,Falcon,South,Cardium,Rod pump,2025-06-07
+W-086,100/07-27-050-07W5/00,Dunlin 7-27H,Dunlin,West,Duvernay,Gas lift,2024-02-15
+W-087,100/08-28-051-05W5/00,  CURLEW 8-28H ,Curlew,North,Montney,ESP,2024-09-17
+W-088,100/09-29-052-06W5/00,Loon 9-29H,Loon,West,Duvernay,ESP,2024-09-24
+W-089,100/10-30-053-07W5/00,  PLOVER 10-30H ,Plover,East,Viking,Rod pump,2023-01-09
+W-090,100/11-01-045-05W5/00,Godwit 11-1H,Godwit,West,Duvernay,Gas lift,2024-03-01
+W-091,100/12-02-046-06W5/00,Merlin 12-2H,Merlin,East,Viking,Rod pump,2023-03-25
+W-092,100/13-03-047-07W5/00,Egret 13-3H,Egret,North,Montney,ESP,2024-01-26
+W-093,100/14-04-048-05W5/00,Ibis 14-4H,Ibis,North,Montney,ESP,2025-11-23
+W-094,100/15-05-049-06W5/00,  IBIS 15-5H ,Ibis,South,Cardium,Rod pump,2024-02-28
+W-095,100/16-06-050-07W5/00,Tern 16-6H,Tern,North,Montney,ESP,2025-06-10
+W-096,100/01-07-051-05W5/00,Kestrel 1-7H,Kestrel,East,Viking,Rod pump,2022-09-11
+W-097,100/02-08-052-06W5/00,  FALCON 2-8H ,Falcon,South,Cardium,Rod pump,2024-05-01
+W-098,100/03-09-053-07W5/00,  LOON 3-9H ,Loon,North,Montney,ESP,2025-03-24
+W-099,100/04-10-045-05W5/00,Merlin 4-10H,Merlin,North,Montney,ESP,2025-08-27
+W-100,100/05-11-046-06W5/00,Snipe 5-11H,Snipe,West,Duvernay,ESP,2024-10-08
+W-101,100/06-12-047-07W5/00,Kestrel 6-12H,Kestrel,South,Cardium,Rod pump,2023-11-20
+W-102,100/07-13-048-05W5/00,Shrike 7-13H,Shrike,East,Viking,Rod pump,2023-10-09
+W-103,100/08-14-049-06W5/00,Dunlin 8-14H,Dunlin,West,Duvernay,Gas lift,2024-06-22
+W-104,100/09-15-050-07W5/00,  HERON 9-15H ,Heron,West,Duvernay,Gas lift,2024-02-24
+W-105,100/10-16-051-05W5/00,  TERN 10-16H ,Tern,North,Montney,ESP,2025-04-28
+W-106,100/11-17-052-06W5/00,Loon 11-17H,Loon,West,Duvernay,Gas lift,2024-01-29
+W-107,100/12-18-053-07W5/00,Tern 12-18H,Tern,West,Duvernay,ESP,2025-02-28
+W-108,100/13-19-045-05W5/00,Godwit 13-19H,Godwit,South,Cardium,Rod pump,2024-12-01
+W-109,100/14-20-046-06W5/00,Osprey 14-20H,Osprey,West,Duvernay,ESP,2025-01-07
+W-110,100/15-21-047-07W5/00,Tern 15-21H,Tern,West,Duvernay,ESP,2025-12-25
+W-111,100/16-22-048-05W5/00,Crane 16-22H,Crane,North,Montney,ESP,2023-12-28
+W-112,100/01-23-049-06W5/00,Kestrel 1-23H,Kestrel,South,Cardium,Rod pump,2024-02-25
+W-113,100/02-24-050-07W5/00,Harrier 2-24H,Harrier,South,Cardium,Rod pump,2023-02-04
+W-114,100/03-25-051-05W5/00,Crane 3-25H,Crane,East,Viking,Rod pump,2023-12-11
+W-115,100/04-26-052-06W5/00,  SNIPE 4-26H ,Snipe,East,Viking,Rod pump,2024-05-25
+W-116,100/05-27-053-07W5/00,Merlin 5-27H,Merlin,North,Montney,ESP,2024-07-27
+W-117,100/06-28-045-05W5/00,Shrike 6-28H,Shrike,East,Viking,Rod pump,2024-07-22
+W-118,100/07-29-046-06W5/00,Snipe 7-29H,Snipe,South,Cardium,Rod pump,2025-05-24
+W-119,100/08-30-047-07W5/00,Snipe 8-30H,Snipe,West,Duvernay,Gas lift,2024-03-13
+W-120,100/09-01-048-05W5/00,Loon 9-1H,Loon,North,Montney,ESP,2024-01-01
+W-121,100/10-02-049-06W5/00,Rail 10-2H,Rail,South,Cardium,Rod pump,2023-06-15
+W-122,100/11-03-050-07W5/00,Tern 11-3H,Tern,South,Cardium,Rod pump,2024-04-11
+W-123,100/12-04-051-05W5/00,Falcon 12-4H,Falcon,West,Duvernay,Gas lift,2024-12-29
+W-124,100/13-05-052-06W5/00,Plover 13-5H,Plover,South,Cardium,Rod pump,2025-05-01
+W-125,100/14-06-053-07W5/00,  RAIL 14-6H ,Rail,East,Viking,Rod pump,2025-06-29
+W-126,100/15-07-045-05W5/00,Kestrel 15-7H,Kestrel,North,Montney,ESP,2024-06-20
+W-127,100/16-08-046-06W5/00,Crane 16-8H,Crane,North,Montney,ESP,2024-07-15
+W-128,100/01-09-047-07W5/00,Merlin 1-9H,Merlin,North,Montney,ESP,2025-03-07
+W-129,100/02-10-048-05W5/00,Grebe 2-10H,Grebe,South,Cardium,Rod pump,2023-03-03
+W-130,100/03-11-049-06W5/00,Heron 3-11H,Heron,East,Viking,Rod pump,2023-03-03
+W-131,100/04-12-050-07W5/00,Falcon 4-12H,Falcon,East,Viking,Rod pump,2022-11-14
+W-132,100/05-13-051-05W5/00,Snipe 5-13H,Snipe,South,Cardium,Rod pump,2023-04-06
+W-133,100/06-14-052-06W5/00,  PLOVER 6-14H ,Plover,South,Cardium,Rod pump,2024-11-23
+W-134,100/07-15-053-07W5/00,Curlew 7-15H,Curlew,East,Viking,Rod pump,2023-07-14
+W-135,100/08-16-045-05W5/00,Harrier 8-16H,Harrier,West,Duvernay,ESP,2025-07-30
+W-136,100/09-17-046-06W5/00,Heron 9-17H,Heron,West,Duvernay,ESP,2025-08-28
+W-137,100/10-18-047-07W5/00,Godwit 10-18H,Godwit,North,Montney,ESP,2025-01-23
+W-138,100/11-19-048-05W5/00,Egret 11-19H,Egret,South,Cardium,Rod pump,2024-12-28
+W-139,100/12-20-049-06W5/00,Snipe 12-20H,Snipe,East,Viking,Rod pump,2023-04-05
+W-140,100/13-21-050-07W5/00,Plover 13-21H,Plover,North,Montney,ESP,2025-03-31
+W-141,100/14-22-051-05W5/00,Tern 14-22H,Tern,East,Viking,Rod pump,2024-12-10
+W-142,100/15-23-052-06W5/00,  CRANE 15-23H ,Crane,East,Viking,Rod pump,2025-03-19
+W-143,100/16-24-053-07W5/00,Rail 16-24H,Rail,West,Duvernay,ESP,2024-08-27
+W-144,100/01-25-045-05W5/00,Dunlin 1-25H,Dunlin,North,Montney,ESP,2024-10-03
+W-145,100/02-26-046-06W5/00,  EGRET 2-26H ,Egret,West,Duvernay,Gas lift,2025-12-27
+W-146,100/03-27-047-07W5/00,Plover 3-27H,Plover,South,Cardium,Rod pump,2024-06-26
+W-147,100/04-28-048-05W5/00,Falcon 4-28H,Falcon,West,Duvernay,ESP,2024-05-09
+W-148,100/05-29-049-06W5/00,Merlin 5-29H,Merlin,West,Duvernay,ESP,2024-11-21
+W-149,100/06-30-050-07W5/00,  OSPREY 6-30H ,Osprey,South,Cardium,Rod pump,2025-09-19
+W-150,100/07-01-051-05W5/00,Crane 7-1H,Crane,East,Viking,Rod pump,2025-06-26
+W-151,100/08-02-052-06W5/00,Tern 8-2H,Tern,West,Duvernay,ESP,2024-01-19
+W-152,100/09-03-053-07W5/00,  PLOVER 9-3H ,Plover,North,Montney,ESP,2024-07-24
+W-153,100/10-04-045-05W5/00,Osprey 10-4H,Osprey,South,Cardium,Rod pump,2025-08-14
+W-154,100/11-05-046-06W5/00,Merlin 11-5H,Merlin,South,Cardium,Rod pump,2025-06-29
+W-155,100/12-06-047-07W5/00,Kestrel 12-6H,Kestrel,East,Viking,Rod pump,2022-09-17
+W-156,100/13-07-048-05W5/00,Falcon 13-7H,Falcon,North,Montney,ESP,2025-06-15
+W-157,100/14-08-049-06W5/00,Osprey 14-8H,Osprey,West,Duvernay,ESP,2025-01-16
+W-158,100/15-09-050-07W5/00,Shrike 15-9H,Shrike,West,Duvernay,ESP,2024-05-01
+W-159,100/16-10-051-05W5/00,Ibis 16-10H,Ibis,South,Cardium,Rod pump,2023-02-22
+W-160,100/01-11-052-06W5/00,Loon 1-11H,Loon,North,Montney,ESP,2024-05-08
+W-161,100/02-12-053-07W5/00,Godwit 2-12H,Godwit,North,Montney,ESP,2024-09-27
+W-162,100/03-13-045-05W5/00,Grebe 3-13H,Grebe,East,Viking,Rod pump,2025-08-09
+W-163,100/04-14-046-06W5/00,Plover 4-14H,Plover,South,Cardium,Rod pump,2023-09-19
+W-164,100/05-15-047-07W5/00,Harrier 5-15H,Harrier,South,Cardium,Rod pump,2023-12-26
+W-165,100/06-16-048-05W5/00,  GREBE 6-16H ,Grebe,West,Duvernay,ESP,2025-10-25
+W-166,100/07-17-049-06W5/00,Dunlin 7-17H,Dunlin,East,Viking,Rod pump,2025-06-15
+W-167,100/08-18-050-07W5/00,Egret 8-18H,Egret,East,Viking,Rod pump,2025-03-23
+W-168,100/09-19-051-05W5/00,Rail 9-19H,Rail,West,Duvernay,ESP,2025-03-12
+W-169,100/10-20-052-06W5/00,Merlin 10-20H,Merlin,North,Montney,ESP,2024-03-23
+W-170,100/11-21-053-07W5/00,Rail 11-21H,Rail,East,Viking,Rod pump,2023-06-02
+W-171,100/12-22-045-05W5/00,Curlew 12-22H,Curlew,South,Cardium,Rod pump,2023-10-14
+W-172,100/13-23-046-06W5/00,Tern 13-23H,Tern,North,Montney,ESP,2024-05-08
+W-173,100/14-24-047-07W5/00,Crane 14-24H,Crane,West,Duvernay,Gas lift,2024-05-15
+W-174,100/15-25-048-05W5/00,Shrike 15-25H,Shrike,South,Cardium,Rod pump,2023-11-18
+W-175,100/16-26-049-06W5/00,Shrike 16-26H,Shrike,East,Viking,Rod pump,2023-02-20
+W-176,100/01-27-050-07W5/00,Avocet 1-27H,Avocet,North,Montney,ESP,2024-09-03
+W-177,100/02-28-051-05W5/00,Kestrel 2-28H,Kestrel,East,Viking,Rod pump,2024-01-09
+W-178,100/03-29-052-06W5/00,  HERON 3-29H ,Heron,South,Cardium,Rod pump,2025-08-26
+W-179,100/04-30-053-07W5/00,  PLOVER 4-30H ,Plover,West,Duvernay,Gas lift,2025-08-19
+W-180,100/05-01-045-05W5/00,Crane 5-1H,Crane,East,Viking,Rod pump,2023-11-08
+W-181,100/06-02-046-06W5/00,Rail 6-2H,Rail,North,Montney,ESP,2024-12-08
+W-182,100/07-03-047-07W5/00,  OSPREY 7-3H ,Osprey,East,Viking,Rod pump,2024-12-21
+W-183,100/08-04-048-05W5/00,Osprey 8-4H,Osprey,East,Viking,Rod pump,2025-02-10
+W-184,100/09-05-049-06W5/00,Curlew 9-5H,Curlew,North,Montney,ESP,2025-10-07
+W-185,100/10-06-050-07W5/00,Plover 10-6H,Plover,East,Viking,Rod pump,2025-06-21
+W-186,100/11-07-051-05W5/00,Osprey 11-7H,Osprey,East,Viking,Rod pump,2024-06-03
+W-187,100/12-08-052-06W5/00,Curlew 12-8H,Curlew,South,Cardium,Rod pump,2024-06-22
+W-188,100/13-09-053-07W5/00,Rail 13-9H,Rail,South,Cardium,Rod pump,2024-02-14
+W-189,100/14-10-045-05W5/00,Merlin 14-10H,Merlin,North,Montney,ESP,2024-10-30
+W-190,100/15-11-046-06W5/00,  SHRIKE 15-11H ,Shrike,North,Montney,ESP,2024-08-30
+W-191,100/16-12-047-07W5/00,Shrike 16-12H,Shrike,East,Viking,Rod pump,2024-10-16
+W-192,100/01-13-048-05W5/00,Grebe 1-13H,Grebe,East,Viking,Rod pump,2024-07-25
+W-193,100/02-14-049-06W5/00,Avocet 2-14H,Avocet,East,Viking,Rod pump,2024-11-02
+W-194,100/03-15-050-07W5/00,Dunlin 3-15H,Dunlin,East,Viking,Rod pump,2023-05-16
+W-195,100/04-16-051-05W5/00,Curlew 4-16H,Curlew,South,Cardium,Rod pump,2024-11-20
+W-196,100/05-17-052-06W5/00,Kestrel 5-17H,Kestrel,South,Cardium,Rod pump,2025-02-19
+W-197,100/06-18-053-07W5/00,Ibis 6-18H,Ibis,North,Montney,ESP,2025-09-12
+W-198,100/07-19-045-05W5/00,Grebe 7-19H,Grebe,North,Montney,ESP,2025-12-24
+W-199,100/08-20-046-06W5/00,Godwit 8-20H,Godwit,East,Viking,Rod pump,2025-04-07
+W-200,100/09-21-047-07W5/00,Ibis 9-21H,Ibis,East,Viking,Rod pump,2024-10-10

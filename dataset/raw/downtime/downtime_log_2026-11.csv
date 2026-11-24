@@ -1,0 +1,199 @@
+well,event_start,hours_lost,reason_text,planned_yn
+W-003,2026-11-03 04:45,4.8,high line pressure,N
+W-003,2026-11-15 10:15,5.9,power bump - restarted,N
+W-004,2026-11-22 02:00,8.0,Power outage,N
+W-007,2026-11-17 18:15,,ESP FAIL - NO RESTART,N
+W-011,2026-11-17 13:45,5.5,power bump - restarted,N
+W-012,2026-11-04 20:30,4.6,power bump - restarted,N
+W-012,2026-11-14 17:30,9.0,power bump - restarted,N
+W-012,2026-11-18 21:00,,Planned facility turnaround - Kestrel battery,Y
+W-013,2026-11-18 23:45,,PLANNED FACILITY TURNAROUND - KESTREL BATTERY,Y
+W-014,2026-11-18 12:30,,Planned facility turnaround - Kestrel battery,Y
+W-016,2026-11-05 00:15,7.7,high line pressure,N
+W-016,2026-11-21 22:15,4.1,high line pressure,N
+W-017,2026-11-07 16:15,5.7,POWER OUTAGE,N
+W-019,2026-11-01 02:45,5.1,Weather,N
+W-019,2026-11-18 06:45,8.2,Weather,N
+W-022,2026-11-20 14:15,6.6,POWER OUTAGE,N
+W-023,2026-11-16 11:45,6.6,Weather,N
+W-024,2026-11-08 03:45,7.2,HIGH LINE PRESSURE,N
+W-025,2026-11-15 00:45,6.0,power bump - restarted,N
+W-026,2026-11-01 19:30,8.6,Weather,N
+W-027,2026-11-21 16:00,5.6,WEATHER,N
+W-032,2026-11-13 07:45,8.9,Pumped off,N
+W-033,2026-11-13 15:15,8.5,Weather,N
+W-034,2026-11-09 06:45,2.7,Power outage,N
+W-039,2026-11-10 11:30,2.6,high line pressure,N
+W-039,2026-11-20 20:45,6.1,Power outage,N
+W-041,2026-11-05 05:15,2.9,power bump - restarted,N
+W-041,2026-11-11 21:30,4.8,power bump - restarted,N
+W-042,2026-11-03 13:45,4.5,Weather,N
+W-043,2026-11-17 08:30,5.1,high line pressure,N
+W-044,2026-11-05 14:45,2.9,high line pressure,N
+W-044,2026-11-16 18:15,7.1,Power outage,N
+W-047,2026-11-04 17:45,2.3,high line pressure,N
+W-051,2026-11-08 04:15,3.5,Power outage,N
+W-053,2026-11-11 03:00,3.9,power bump - restarted,N
+W-054,2026-11-16 08:00,4.3,WEATHER,N
+W-056,2026-11-06 15:00,2.1,POWER BUMP - RESTARTED,N
+W-056,2026-11-16 00:15,3.3,Pumped off,N
+W-056,2026-11-21 21:00,4.6,power bump - restarted,N
+W-058,2026-11-13 15:45,4.5,WEATHER,N
+W-059,2026-11-07 19:15,5.0,power bump - restarted,N
+W-061,2026-11-10 01:15,7.2,high line pressure,N
+W-061,2026-11-13 11:45,4.5,POWER BUMP - RESTARTED,N
+W-063,2026-11-07 13:45,4.8,power bump - restarted,N
+W-063,2026-11-17 06:15,8.7,Power outage,N
+W-064,2026-11-13 15:30,7.2,high line pressure,N
+W-065,2026-11-10 01:00,4.7,Power outage,N
+W-065,2026-11-14 01:15,5.9,high line pressure,N
+W-065,2026-11-15 12:00,5.1,Power outage,N
+W-066,2026-11-05 22:30,2.0,WEATHER,N
+W-066,2026-11-06 01:30,8.3,high line pressure,N
+W-066,2026-11-17 15:45,,esp fail - no restart,N
+W-068,2026-11-03 20:15,5.2,high line pressure,N
+W-068,2026-11-17 23:00,8.5,WEATHER,N
+W-069,2026-11-01 03:00,2.6,Power outage,N
+W-071,2026-11-07 00:15,8.7,POWER BUMP - RESTARTED,N
+W-074,2026-11-17 18:45,2.2,Weather,N
+W-074,2026-11-10 14:15,3.2,rod pump down - restarted,N
+W-074,2026-11-11 17:15,4.1,POLISHED ROD CLAMP SLIPPED,N
+W-074,2026-11-12 13:15,3.3,stuffing box leak,N
+W-074,2026-11-14 03:15,4.8,stuffing box leak,N
+W-074,2026-11-15 07:15,3.4,stuffing box leak,N
+W-074,2026-11-16 08:30,5.5,rod pump down - restarted,N
+W-074,2026-11-17 11:45,4.6,ROD PUMP DOWN - RESTARTED,N
+W-074,2026-11-18 23:45,2.5,pump off controller fault,N
+W-074,2026-11-20 00:45,2.7,ROD PUMP DOWN - RESTARTED,N
+W-074,2026-11-21 08:00,3.7,polished rod clamp slipped,N
+W-074,2026-11-22 10:45,4.2,Rod pump - pumped off,N
+W-075,2026-11-20 16:30,8.9,POWER BUMP - RESTARTED,N
+W-076,2026-11-13 07:30,2.7,Pumped off,N
+W-077,2026-11-08 15:30,7.8,Weather,N
+W-077,2026-11-10 04:45,8.9,HIGH LINE PRESSURE,N
+W-078,2026-11-14 08:45,4.2,Weather,N
+W-079,2026-11-17 10:45,7.0,POWER BUMP - RESTARTED,N
+W-082,2026-11-20 17:45,7.7,Power outage,N
+W-082,2026-11-21 11:00,2.5,Weather,N
+W-083,2026-11-22 19:30,2.6,POWER BUMP - RESTARTED,N
+W-085,2026-11-03 13:45,4.5,Weather,N
+W-085,2026-11-08 11:15,4.8,Weather,N
+W-086,2026-11-15 03:45,6.2,Pumped off,N
+W-088,2026-11-20 04:00,4.5,high line pressure,N
+W-090,2026-11-02 17:30,2.9,power bump - restarted,N
+W-093,2026-11-05 00:45,7.2,Pumped off,N
+W-093,2026-11-07 01:45,8.0,Pumped off,N
+W-097,2026-11-03 07:00,8.4,POWER OUTAGE,N
+W-098,2026-11-01 07:45,6.0,Weather,N
+W-101,2026-11-08 18:15,7.6,Pumped off,N
+W-103,2026-11-01 05:15,4.1,high line pressure,N
+W-103,2026-11-17 06:30,7.3,Pumped off,N
+W-106,2026-11-11 19:45,4.3,Power outage,N
+W-106,2026-11-18 20:45,8.7,Pumped off,N
+W-108,2026-11-02 17:30,2.2,WEATHER,N
+W-108,2026-11-04 02:15,2.1,power bump - restarted,N
+W-109,2026-11-06 02:30,8.5,high line pressure,N
+W-109,2026-11-11 19:15,6.2,power bump - restarted,N
+W-109,2026-11-18 19:30,2.6,Weather,N
+W-110,2026-11-10 07:15,216.0,Planned workover - pump change,Y
+W-114,2026-11-03 22:00,3.3,POWER BUMP - RESTARTED,N
+W-115,2026-11-10 10:45,5.2,Pumped off,N
+W-115,2026-11-16 14:00,2.6,power bump - restarted,N
+W-116,2026-11-11 20:00,7.4,HIGH LINE PRESSURE,N
+W-116,2026-11-15 23:45,5.7,high line pressure,N
+W-117,2026-11-14 14:30,8.4,Weather,N
+W-119,2026-11-22 08:45,3.8,Power outage,N
+W-120,2026-11-12 16:45,8.2,power bump - restarted,N
+W-121,2026-11-21 00:30,6.2,Pumped off,N
+W-122,2026-11-01 17:15,5.5,Pumped off,N
+W-122,2026-11-13 02:30,4.5,PUMPED OFF,N
+W-122,2026-11-17 20:15,3.5,Weather,N
+W-124,2026-11-14 09:30,3.6,POWER BUMP - RESTARTED,N
+W-124,2026-11-16 21:15,7.2,POWER BUMP - RESTARTED,N
+W-126,2026-11-01 03:45,6.7,Pumped off,N
+W-126,2026-11-12 10:30,5.8,high line pressure,N
+W-126,2026-11-19 04:45,7.8,Power outage,N
+W-128,2026-11-10 01:45,4.7,Pumped off,N
+W-129,2026-11-09 12:00,2.9,rod pump down - restarted,N
+W-129,2026-11-11 05:30,4.5,STUFFING BOX LEAK,N
+W-129,2026-11-12 02:30,4.4,rod pump down - restarted,N
+W-129,2026-11-13 01:30,5.7,polished rod clamp slipped,N
+W-129,2026-11-14 06:15,2.5,PUMP OFF CONTROLLER FAULT,N
+W-129,2026-11-15 17:30,4.4,stuffing box leak,N
+W-129,2026-11-16 15:15,3.8,pump off controller fault,N
+W-129,2026-11-19 11:45,5.7,rod pump down - restarted,N
+W-129,2026-11-20 08:15,4.6,polished rod clamp slipped,N
+W-129,2026-11-21 00:45,3.0,STUFFING BOX LEAK,N
+W-129,2026-11-22 12:15,4.0,polished rod clamp slipped,N
+W-131,2026-11-12 21:30,5.0,power bump - restarted,N
+W-134,2026-11-10 11:15,2.4,power bump - restarted,N
+W-134,2026-11-13 13:45,4.1,Power outage,N
+W-134,2026-11-22 23:00,7.6,Weather,N
+W-137,2026-11-16 12:30,4.2,Pumped off,N
+W-138,2026-11-06 10:30,2.7,Weather,N
+W-138,2026-11-08 05:15,3.2,power bump - restarted,N
+W-141,2026-11-07 02:30,5.8,POWER OUTAGE,N
+W-142,2026-11-12 11:30,3.6,HIGH LINE PRESSURE,N
+W-143,2026-11-22 13:15,4.2,WEATHER,N
+W-144,2026-11-17 22:45,,ESP FAIL - NO RESTART,N
+W-145,2026-11-20 12:45,3.0,power bump - restarted,N
+W-147,2026-11-16 18:45,7.2,power bump - restarted,N
+W-148,2026-11-03 11:30,7.3,power bump - restarted,N
+W-148,2026-11-08 11:00,7.4,PUMPED OFF,N
+W-149,2026-11-08 15:00,7.9,WEATHER,N
+W-149,2026-11-13 00:45,8.7,HIGH LINE PRESSURE,N
+W-149,2026-11-21 01:00,5.7,high line pressure,N
+W-150,2026-11-12 21:30,8.3,Pumped off,N
+W-151,2026-11-03 19:15,6.8,Weather,N
+W-153,2026-11-02 23:45,4.8,Weather,N
+W-153,2026-11-07 16:30,5.2,POWER OUTAGE,N
+W-154,2026-11-04 10:30,7.1,power bump - restarted,N
+W-154,2026-11-07 01:00,4.9,WEATHER,N
+W-155,2026-11-20 20:45,6.3,POWER OUTAGE,N
+W-156,2026-11-10 22:00,216.0,Planned workover - pump change,Y
+W-157,2026-11-11 20:15,3.4,Weather,N
+W-158,2026-11-15 07:15,4.9,high line pressure,N
+W-158,2026-11-17 22:00,7.8,Power outage,N
+W-160,2026-11-04 21:15,6.7,Power outage,N
+W-160,2026-11-18 23:45,7.9,power bump - restarted,N
+W-162,2026-11-06 04:45,3.8,Pumped off,N
+W-164,2026-11-16 13:30,4.8,Weather,N
+W-166,2026-11-02 00:00,8.8,Power outage,N
+W-166,2026-11-09 03:45,5.4,Power outage,N
+W-166,2026-11-21 04:00,8.1,high line pressure,N
+W-168,2026-11-14 08:45,4.1,high line pressure,N
+W-171,2026-11-05 23:30,5.6,power bump - restarted,N
+W-171,2026-11-22 15:00,8.0,high line pressure,N
+W-172,2026-11-02 20:45,4.0,power bump - restarted,N
+W-175,2026-11-01 21:00,5.0,Weather,N
+W-176,2026-11-17 18:00,7.4,POWER OUTAGE,N
+W-176,2026-11-22 12:45,8.5,Weather,N
+W-180,2026-11-02 07:30,6.7,Weather,N
+W-180,2026-11-12 09:30,8.7,Pumped off,N
+W-180,2026-11-19 00:30,3.9,Weather,N
+W-181,2026-11-03 01:45,3.4,WEATHER,N
+W-182,2026-11-17 09:00,8.7,Pumped off,N
+W-183,2026-11-03 21:00,3.6,Pumped off,N
+W-183,2026-11-07 19:45,2.7,high line pressure,N
+W-184,2026-11-07 10:45,3.9,high line pressure,N
+W-185,2026-11-10 06:45,3.7,power bump - restarted,N
+W-185,2026-11-09 07:00,4.4,POLISHED ROD CLAMP SLIPPED,N
+W-185,2026-11-10 23:15,3.8,PUMP OFF CONTROLLER FAULT,N
+W-185,2026-11-11 19:30,3.8,PUMP OFF CONTROLLER FAULT,N
+W-185,2026-11-12 16:45,4.1,rod pump down - restarted,N
+W-185,2026-11-13 14:00,3.4,pump off controller fault,N
+W-185,2026-11-14 05:30,4.6,ROD PUMP DOWN - RESTARTED,N
+W-185,2026-11-15 22:15,3.4,ROD PUMP - PUMPED OFF,N
+W-185,2026-11-17 16:45,5.4,stuffing box leak,N
+W-185,2026-11-18 21:00,3.7,POLISHED ROD CLAMP SLIPPED,N
+W-186,2026-11-15 19:45,6.3,Weather,N
+W-187,2026-11-08 01:45,7.9,POWER BUMP - RESTARTED,N
+W-188,2026-11-11 10:15,4.8,PUMPED OFF,N
+W-189,2026-11-05 15:00,8.8,HIGH LINE PRESSURE,N
+W-190,2026-11-15 22:45,2.4,power bump - restarted,N
+W-193,2026-11-12 05:45,7.9,HIGH LINE PRESSURE,N
+W-195,2026-11-03 05:15,8.2,Weather,N
+W-196,2026-11-19 05:45,6.5,power bump - restarted,N
+W-197,2026-11-03 05:15,8.0,Power outage,N
+W-199,2026-11-10 20:00,4.1,Weather,N
+W-200,2026-11-03 08:45,4.0,HIGH LINE PRESSURE,N

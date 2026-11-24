@@ -1,0 +1,240 @@
+[
+ {
+  "well_id": "W-012",
+  "safety_scenario": null,
+  "scenario_name": "Planned ESD trips during Kestrel turnaround",
+  "expected_rules": [],
+  "decoy": true
+ },
+ {
+  "well_id": "W-013",
+  "safety_scenario": null,
+  "scenario_name": "Planned ESD trips during Kestrel turnaround",
+  "expected_rules": [],
+  "decoy": true
+ },
+ {
+  "well_id": "W-014",
+  "safety_scenario": null,
+  "scenario_name": "Planned ESD trips during Kestrel turnaround",
+  "expected_rules": [],
+  "decoy": true
+ },
+ {
+  "well_id": "W-019",
+  "safety_scenario": "SF6",
+  "scenario_name": "Repeated unplanned ESD trips",
+  "expected_rules": [
+   "SAFE_ESD_TRIPS"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-027",
+  "safety_scenario": "SF10",
+  "scenario_name": "Spill not yet closed out",
+  "expected_rules": [
+   "SAFE_SPILL_OPEN"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-031",
+  "safety_scenario": "SF1",
+  "scenario_name": "Production casing near MAASP (also rising)",
+  "expected_rules": [
+   "SAFE_CASING_NEAR_MAASP",
+   "CASING_PRESSURE_RISING"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-038",
+  "safety_scenario": "SF1",
+  "scenario_name": "Production casing near MAASP",
+  "expected_rules": [
+   "SAFE_CASING_NEAR_MAASP"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-047",
+  "safety_scenario": "SF4",
+  "scenario_name": "H2S detected at surface",
+  "expected_rules": [
+   "SAFE_H2S_AMBIENT",
+   "SAFE_H2S_ALARMS"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-055",
+  "safety_scenario": "SF8",
+  "scenario_name": "Subsurface safety valve test overdue",
+  "expected_rules": [
+   "SAFE_CRITICAL_TEST_OVERDUE"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-064",
+  "safety_scenario": "SF2",
+  "scenario_name": "Surface casing pressure building (possible vent flow)",
+  "expected_rules": [
+   "SAFE_SC_PRESSURE"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-076",
+  "safety_scenario": "SF13",
+  "scenario_name": "Venting above monthly limit",
+  "expected_rules": [
+   "SAFE_VENT_LIMIT"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-088",
+  "safety_scenario": "SF5",
+  "scenario_name": "Flowline pressure near MAOP",
+  "expected_rules": [
+   "SAFE_FLOWLINE_MAOP"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-099",
+  "safety_scenario": "SF7",
+  "scenario_name": "Pressure safety valve lifted",
+  "expected_rules": [
+   "SAFE_PSV_LIFT"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-102",
+  "safety_scenario": "SF11",
+  "scenario_name": "Reportable spill not reported to regulator",
+  "expected_rules": [
+   "SAFE_UNREPORTED",
+   "SAFE_SPILL_OPEN"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-112",
+  "safety_scenario": "SF14",
+  "scenario_name": "Corrosion survey shows high wall loss",
+  "expected_rules": [
+   "SAFE_WALL_LOSS"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-118",
+  "safety_scenario": "SF1",
+  "scenario_name": "Production casing near MAASP",
+  "expected_rules": [
+   "SAFE_CASING_NEAR_MAASP"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-120",
+  "safety_scenario": null,
+  "scenario_name": "Old spill, closed out and reported",
+  "expected_rules": [],
+  "decoy": true
+ },
+ {
+  "well_id": "W-125",
+  "safety_scenario": "SF8",
+  "scenario_name": "PSV recertification overdue",
+  "expected_rules": [
+   "SAFE_CRITICAL_TEST_OVERDUE"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-133",
+  "safety_scenario": "SF4",
+  "scenario_name": "H2S detected at surface",
+  "expected_rules": [
+   "SAFE_H2S_AMBIENT",
+   "SAFE_H2S_ALARMS"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-140",
+  "safety_scenario": "SF9",
+  "scenario_name": "Failed packer isolation test, no retest",
+  "expected_rules": [
+   "SAFE_FAILED_TEST"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-146",
+  "safety_scenario": "SF15",
+  "scenario_name": "Open regulator non-compliance",
+  "expected_rules": [
+   "SAFE_NONCOMPLIANCE"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-150",
+  "safety_scenario": null,
+  "scenario_name": "Known non-serious vent flow, low stable surface casing pressure, tests current",
+  "expected_rules": [],
+  "decoy": true
+ },
+ {
+  "well_id": "W-161",
+  "safety_scenario": "SF16",
+  "scenario_name": "ESP electrical fault",
+  "expected_rules": [
+   "SAFE_ELECTRICAL"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-162",
+  "safety_scenario": "SF12",
+  "scenario_name": "Open gas release",
+  "expected_rules": [
+   "SAFE_GAS_RELEASE"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-170",
+  "safety_scenario": "SF3",
+  "scenario_name": "Serious surface casing vent flow on latest test",
+  "expected_rules": [
+   "SAFE_SCVF_SERIOUS",
+   "SAFE_SC_PRESSURE"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-181",
+  "safety_scenario": "SF6",
+  "scenario_name": "Repeated unplanned ESD trips",
+  "expected_rules": [
+   "SAFE_ESD_TRIPS"
+  ],
+  "decoy": false
+ },
+ {
+  "well_id": "W-188",
+  "safety_scenario": "SF8",
+  "scenario_name": "H2S detector calibration overdue",
+  "expected_rules": [
+   "SAFE_CRITICAL_TEST_OVERDUE"
+  ],
+  "decoy": false
+ }
+]

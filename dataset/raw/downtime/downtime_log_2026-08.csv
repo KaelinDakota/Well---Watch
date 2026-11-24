@@ -1,0 +1,206 @@
+well,event_start,hours_lost,reason_text,planned_yn
+W-001,2026-08-15 13:00,4.8,Power outage,N
+W-002,2026-08-19 06:15,7.8,WEATHER,N
+W-006,2026-08-15 01:15,3.1,Power outage,N
+W-006,2026-08-17 08:30,8.8,Weather,N
+W-007,2026-08-23 20:00,4.0,HIGH LINE PRESSURE,N
+W-009,2026-08-04 14:00,4.3,Weather,N
+W-009,2026-08-25 03:45,5.5,power bump - restarted,N
+W-009,2026-08-31 08:00,6.2,power bump - restarted,N
+W-010,2026-08-20 00:30,6.7,Weather,N
+W-010,2026-08-30 19:45,8.7,PUMPED OFF,N
+W-011,2026-08-09 13:45,8.5,Pumped off,N
+W-013,2026-08-19 23:15,5.8,Power outage,N
+W-017,2026-08-01 20:15,4.2,Weather,N
+W-019,2026-08-23 19:45,5.5,high line pressure,N
+W-019,2026-08-29 22:15,3.8,power bump - restarted,N
+W-020,2026-08-15 18:45,4.7,high line pressure,N
+W-020,2026-08-17 12:00,4.8,WEATHER,N
+W-020,2026-08-20 23:45,5.0,Pumped off,N
+W-020,2026-08-21 06:15,6.1,POWER OUTAGE,N
+W-021,2026-08-18 15:30,2.4,PUMPED OFF,N
+W-021,2026-08-27 20:00,5.6,Pumped off,N
+W-023,2026-08-03 00:15,2.3,HIGH LINE PRESSURE,N
+W-023,2026-08-09 23:45,5.0,WEATHER,N
+W-023,2026-08-13 06:30,4.8,Weather,N
+W-023,2026-08-27 02:30,7.1,power bump - restarted,N
+W-025,2026-08-02 11:45,3.5,power bump - restarted,N
+W-026,2026-08-12 13:30,4.2,Power outage,N
+W-028,2026-08-25 00:45,3.6,PUMPED OFF,N
+W-031,2026-08-03 19:00,4.9,power bump - restarted,N
+W-031,2026-08-18 15:45,5.9,Pumped off,N
+W-033,2026-08-23 21:45,5.1,PUMPED OFF,N
+W-034,2026-08-09 02:15,4.1,Power outage,N
+W-034,2026-08-21 23:45,8.3,Weather,N
+W-035,2026-08-02 20:30,7.5,power bump - restarted,N
+W-035,2026-08-21 02:30,8.2,Power outage,N
+W-036,2026-08-10 12:00,6.5,WEATHER,N
+W-039,2026-08-05 11:45,6.9,Power outage,N
+W-039,2026-08-12 19:45,5.3,Pumped off,N
+W-039,2026-08-22 12:30,8.7,POWER OUTAGE,N
+W-039,2026-08-29 06:45,7.2,high line pressure,N
+W-040,2026-08-13 18:00,3.0,PUMPED OFF,N
+W-041,2026-08-16 20:45,3.1,Power outage,N
+W-041,2026-08-17 22:30,2.8,HIGH LINE PRESSURE,N
+W-041,2026-08-29 18:45,4.4,high line pressure,N
+W-047,2026-08-16 22:45,5.7,Pumped off,N
+W-048,2026-08-14 00:15,8.6,HIGH LINE PRESSURE,N
+W-048,2026-08-31 18:30,7.4,POWER BUMP - RESTARTED,N
+W-052,2026-08-20 16:00,2.6,Pumped off,N
+W-053,2026-08-21 18:30,2.9,Power outage,N
+W-053,2026-08-24 15:30,5.3,high line pressure,N
+W-054,2026-08-10 20:45,7.8,Pumped off,N
+W-054,2026-08-13 09:45,6.1,power bump - restarted,N
+W-054,2026-08-23 03:00,7.8,high line pressure,N
+W-054,2026-08-24 16:45,4.3,power bump - restarted,N
+W-054,2026-08-25 09:30,3.7,Weather,N
+W-055,2026-08-06 01:00,3.3,power bump - restarted,N
+W-055,2026-08-16 17:15,2.4,Pumped off,N
+W-057,2026-08-07 06:45,4.6,PUMPED OFF,N
+W-057,2026-08-15 04:30,3.5,Power outage,N
+W-058,2026-08-03 16:00,5.4,Pumped off,N
+W-059,2026-08-16 12:45,5.6,power bump - restarted,N
+W-060,2026-08-04 09:15,5.5,power bump - restarted,N
+W-060,2026-08-16 00:00,2.4,POWER OUTAGE,N
+W-061,2026-08-14 20:00,8.0,HIGH LINE PRESSURE,N
+W-061,2026-08-23 08:00,4.9,Pumped off,N
+W-062,2026-08-01 22:00,8.0,Power outage,N
+W-063,2026-08-09 09:30,7.7,high line pressure,N
+W-063,2026-08-11 22:30,3.9,Power outage,N
+W-065,2026-08-05 10:15,8.4,HIGH LINE PRESSURE,N
+W-066,2026-08-03 22:30,8.8,power bump - restarted,N
+W-066,2026-08-07 18:30,6.9,Weather,N
+W-066,2026-08-26 11:15,9.0,high line pressure,N
+W-067,2026-08-08 19:30,7.9,Weather,N
+W-070,2026-08-11 10:45,5.7,POWER BUMP - RESTARTED,N
+W-073,2026-08-24 05:15,3.2,POWER BUMP - RESTARTED,N
+W-077,2026-08-11 21:15,7.8,Weather,N
+W-077,2026-08-20 19:30,4.6,Weather,N
+W-078,2026-08-12 10:15,6.8,high line pressure,N
+W-079,2026-08-29 01:15,7.4,Weather,N
+W-080,2026-08-31 21:00,8.8,POWER BUMP - RESTARTED,N
+W-081,2026-08-11 23:00,2.1,PUMPED OFF,N
+W-081,2026-08-12 21:00,3.2,Power outage,N
+W-081,2026-08-28 01:30,7.0,POWER BUMP - RESTARTED,N
+W-082,2026-08-06 15:45,8.0,Weather,N
+W-083,2026-08-16 03:45,4.2,Power outage,N
+W-083,2026-08-31 22:15,4.6,high line pressure,N
+W-084,2026-08-22 01:15,5.3,Pumped off,N
+W-085,2026-08-13 10:00,7.0,Pumped off,N
+W-085,2026-08-17 09:15,8.5,Weather,N
+W-085,2026-08-26 11:15,6.8,power bump - restarted,N
+W-086,2026-08-25 07:30,8.8,Pumped off,N
+W-088,2026-08-10 00:00,5.2,high line pressure,N
+W-088,2026-08-19 13:15,5.0,power bump - restarted,N
+W-089,2026-08-04 03:15,3.4,POWER BUMP - RESTARTED,N
+W-089,2026-08-16 15:15,5.2,high line pressure,N
+W-089,2026-08-26 19:45,2.6,high line pressure,N
+W-090,2026-08-09 16:15,3.4,high line pressure,N
+W-090,2026-08-24 12:30,8.4,Power outage,N
+W-091,2026-08-06 14:45,7.8,power bump - restarted,N
+W-092,2026-08-12 17:15,3.0,Power outage,N
+W-095,2026-08-30 09:30,3.5,Power outage,N
+W-096,2026-08-13 20:00,3.5,Pumped off,N
+W-097,2026-08-23 09:15,2.6,Power outage,N
+W-102,2026-08-29 17:45,2.1,Power outage,N
+W-102,2026-08-31 23:45,4.7,high line pressure,N
+W-104,2026-08-05 16:15,6.6,POWER BUMP - RESTARTED,N
+W-105,2026-08-30 20:15,8.8,high line pressure,N
+W-106,2026-08-05 07:30,8.2,Power outage,N
+W-106,2026-08-25 16:30,2.4,Power outage,N
+W-109,2026-08-01 09:30,4.6,POWER OUTAGE,N
+W-110,2026-08-21 02:00,5.1,power bump - restarted,N
+W-112,2026-08-09 04:45,6.9,WEATHER,N
+W-112,2026-08-25 03:45,3.4,Weather,N
+W-113,2026-08-05 13:00,7.3,power bump - restarted,N
+W-113,2026-08-06 05:00,4.7,power bump - restarted,N
+W-113,2026-08-08 07:45,7.6,Weather,N
+W-113,2026-08-14 14:30,8.6,POWER OUTAGE,N
+W-113,2026-08-20 20:00,5.9,power bump - restarted,N
+W-116,2026-08-03 23:15,5.5,Power outage,N
+W-116,2026-08-12 07:30,8.3,Power outage,N
+W-118,2026-08-05 17:00,2.3,POWER BUMP - RESTARTED,N
+W-118,2026-08-14 05:30,6.7,power bump - restarted,N
+W-120,2026-08-19 23:15,4.2,POWER BUMP - RESTARTED,N
+W-121,2026-08-12 01:30,2.3,high line pressure,N
+W-123,2026-08-31 22:15,7.0,HIGH LINE PRESSURE,N
+W-127,2026-08-19 20:00,5.1,POWER BUMP - RESTARTED,N
+W-127,2026-08-28 15:30,3.8,POWER OUTAGE,N
+W-128,2026-08-15 23:15,4.4,Pumped off,N
+W-128,2026-08-21 03:00,2.4,WEATHER,N
+W-129,2026-08-01 01:30,5.4,Pumped off,N
+W-129,2026-08-03 21:30,4.2,power bump - restarted,N
+W-129,2026-08-25 20:15,8.7,Power outage,N
+W-134,2026-08-16 20:00,2.8,Pumped off,N
+W-134,2026-08-18 08:30,3.5,PUMPED OFF,N
+W-135,2026-08-04 21:00,2.8,high line pressure,N
+W-135,2026-08-11 05:15,7.3,Power outage,N
+W-135,2026-08-29 21:00,8.6,WEATHER,N
+W-136,2026-08-15 21:45,3.3,HIGH LINE PRESSURE,N
+W-136,2026-08-17 10:45,2.9,Power outage,N
+W-138,2026-08-06 13:45,4.0,Weather,N
+W-139,2026-08-28 03:30,8.0,power bump - restarted,N
+W-139,2026-08-30 00:30,2.9,POWER BUMP - RESTARTED,N
+W-139,2026-08-31 11:30,3.6,high line pressure,N
+W-141,2026-08-02 18:15,2.4,high line pressure,N
+W-142,2026-08-08 00:45,4.6,Weather,N
+W-142,2026-08-10 20:15,4.6,Weather,N
+W-142,2026-08-12 15:00,7.1,Power outage,N
+W-142,2026-08-27 01:15,5.2,Pumped off,N
+W-145,2026-08-06 14:15,2.3,WEATHER,N
+W-145,2026-08-16 19:45,7.0,PUMPED OFF,N
+W-145,2026-08-17 11:00,7.6,Pumped off,N
+W-146,2026-08-06 02:15,6.8,power bump - restarted,N
+W-146,2026-08-18 19:00,2.4,HIGH LINE PRESSURE,N
+W-147,2026-08-07 07:45,6.5,high line pressure,N
+W-147,2026-08-08 22:00,3.4,Weather,N
+W-147,2026-08-16 10:00,2.6,power bump - restarted,N
+W-148,2026-08-02 07:30,4.4,power bump - restarted,N
+W-149,2026-08-03 14:00,7.7,high line pressure,N
+W-150,2026-08-01 02:15,6.1,high line pressure,N
+W-150,2026-08-13 17:45,3.0,power bump - restarted,N
+W-152,2026-08-31 12:00,3.6,Power outage,N
+W-153,2026-08-17 15:30,2.8,Pumped off,N
+W-155,2026-08-05 19:00,3.6,power bump - restarted,N
+W-155,2026-08-09 10:00,6.2,Power outage,N
+W-157,2026-08-21 18:45,8.1,Weather,N
+W-157,2026-08-24 09:15,8.4,Pumped off,N
+W-158,2026-08-01 22:30,2.9,HIGH LINE PRESSURE,N
+W-160,2026-08-25 03:00,3.1,Pumped off,N
+W-160,2026-08-28 09:30,5.7,power bump - restarted,N
+W-161,2026-08-15 03:15,4.3,Weather,N
+W-163,2026-08-06 10:30,6.4,high line pressure,N
+W-163,2026-08-19 03:45,9.0,POWER BUMP - RESTARTED,N
+W-164,2026-08-29 11:30,8.9,HIGH LINE PRESSURE,N
+W-165,2026-08-29 15:30,7.8,POWER OUTAGE,N
+W-166,2026-08-10 04:30,8.3,Weather,N
+W-167,2026-08-05 18:00,5.2,Power outage,N
+W-167,2026-08-06 20:00,6.2,power bump - restarted,N
+W-168,2026-08-08 18:30,8.3,Power outage,N
+W-169,2026-08-20 19:45,2.8,high line pressure,N
+W-171,2026-08-11 14:00,5.3,power bump - restarted,N
+W-172,2026-08-01 11:15,5.1,high line pressure,N
+W-172,2026-08-09 08:15,6.3,power bump - restarted,N
+W-173,2026-08-03 19:30,6.3,POWER OUTAGE,N
+W-174,2026-08-15 03:00,2.4,high line pressure,N
+W-174,2026-08-25 20:30,8.2,power bump - restarted,N
+W-175,2026-08-26 15:00,7.6,Weather,N
+W-176,2026-08-01 22:15,6.4,POWER OUTAGE,N
+W-176,2026-08-19 05:45,6.4,HIGH LINE PRESSURE,N
+W-179,2026-08-10 21:45,2.4,Weather,N
+W-181,2026-08-03 17:45,7.6,high line pressure,N
+W-183,2026-08-08 23:45,4.3,Power outage,N
+W-184,2026-08-20 19:15,8.7,WEATHER,N
+W-189,2026-08-06 20:15,3.9,Weather,N
+W-189,2026-08-27 19:15,2.7,Power outage,N
+W-189,2026-08-30 13:45,5.7,POWER OUTAGE,N
+W-190,2026-08-07 17:15,4.5,power bump - restarted,N
+W-192,2026-08-12 21:30,5.5,HIGH LINE PRESSURE,N
+W-193,2026-08-04 01:30,3.5,Weather,N
+W-193,2026-08-29 01:15,4.2,Weather,N
+W-194,2026-08-16 08:30,3.6,Weather,N
+W-196,2026-08-18 11:00,2.5,high line pressure,N
+W-198,2026-08-02 20:00,2.2,Weather,N
+W-198,2026-08-06 03:00,7.0,Weather,N
+W-199,2026-08-25 02:15,3.4,power bump - restarted,N
+W-200,2026-08-16 04:00,4.5,power bump - restarted,N
