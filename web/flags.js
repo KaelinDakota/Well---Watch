@@ -136,7 +136,11 @@
     Object.assign({id, name, severity, weight, enabled: true, category, match: 'all', dataset: 'well', conditions, message, action}, extra);
   const c = (field, op, value) => value === undefined ? {field, op} : {field, op, value};
   const SAFE_ACT = ' Follow your company\'s integrity and emergency procedures; this flag informs, it does not decide.';
-  const DEFAULT_RULES = [
+  // group: rules about the same underlying problem; a well only scores the highest weight in a group.
+  // fix_cost: rough typical cost to fix (CAD), used for payback ranking of production flags. Placeholders: engineers set their own.
+  const GROUPS = {"SAFE_CASING_NEAR_MAASP": "Production casing pressure", "CASING_PRESSURE_RISING": "Production casing pressure", "SAFE_SC_PRESSURE": "Well integrity: vent flow / failed tests", "SAFE_SCVF_SERIOUS": "Well integrity: vent flow / failed tests", "SAFE_FAILED_TEST": "Well integrity: vent flow / failed tests", "SAFE_H2S_AMBIENT": "H2S at surface", "SAFE_H2S_ALARMS": "H2S at surface", "SAFE_SPILL_OPEN": "Releases", "SAFE_GAS_RELEASE": "Releases", "SAFE_UNREPORTED": "Releases", "SAFE_CRITICAL_TEST_OVERDUE": "Tests due", "SAFE_TEST_OVERDUE": "Tests due", "SAFE_TEST_DUE_SOON": "Tests due", "WELL_DOWN_UNPLANNED": "Downtime", "FREQUENT_DOWNTIME": "Downtime"};
+  const FIX_COSTS = {"WELL_DOWN_UNPLANNED": 90000, "UNDER_TYPE_CURVE": 15000, "WATER_CUT_JUMP": 40000, "GOR_RISING": 5000, "FREQUENT_DOWNTIME": 8000, "DATA_STALE": 1500};
+  const DEFAULT_RULES_RAW = [
     // ---- safety (category "Safety" ranks first when "safety first" is on) ----
     R('SAFE_H2S_AMBIENT', 'H2S detected at surface', 'Critical', 70, 'Safety', [c('h2s_ambient_max_7d_ppm', 'gte', 10)],
       'Fixed monitor read up to {h2s_ambient_max_7d_ppm} ppm H2S at the wellsite in the last 7 days ({sour_class}; {residences_in_epz} residences in EPZ).', 'Find the source and confirm monitors and access controls.' + SAFE_ACT),
@@ -196,6 +200,7 @@
     R('DATA_STALE', 'SCADA data missing', 'Review', 10, 'Data', [c('days_since_last_data', 'gte', 2)],
       'No SCADA data for {days_since_last_data} days.', 'Ask field / SCADA support to check communications before trusting this well\'s numbers.'),
   ];
+  const DEFAULT_RULES = DEFAULT_RULES_RAW.map(r => Object.assign(r, GROUPS[r.id] ? {group: GROUPS[r.id]} : {}, FIX_COSTS[r.id] ? {fix_cost: FIX_COSTS[r.id]} : {}));
 
   const isEmpty = v => v === null || v === undefined || v === '' || (typeof v === 'number' && isNaN(v));
   const num = v => isEmpty(v) ? null : Number(v);
@@ -280,22 +285,85 @@
   }
 
   const isSafety = f => String(f.category || '').toLowerCase() === 'safety';
-  // Score = sum of weights of the rules a well trips. With safetyFirst, wells with a Critical or Warning safety flag come before all others.
-  function rank(facts, rules, asOf, mode, engineer, items, opts) {
-    const safetyFirst = !opts || opts.safetyFirst !== false;
-    const ex = evaluate(facts.filter(f => !engineer || f.engineer_id === engineer), rules, asOf, items);
-    const by = {};
-    for (const e of ex) {
-      const r = rules.find(x => x.id === e.rule_id);
-      const b = by[e.well_id] = by[e.well_id] || {well_id: e.well_id, score: 0, flags: [], worst: 'Review', safety: false, safety_worst: null};
-      b.score += Number(r.weight || 0); b.flags.push(e);
-      if (e.severity === 'Critical' || (e.severity === 'Warning' && b.worst === 'Review')) b.worst = e.severity;
-      if (isSafety(e)) { b.safety = true; if (!b.safety_worst || e.severity === 'Critical' || (e.severity === 'Warning' && b.safety_worst === 'Review')) b.safety_worst = e.severity; }
+  const SEV = {Critical: 0, Warning: 1, Review: 2};
+  const TIERS = ['safety', 'production', 'watch', 'handled'];
+  // Has the flag got worse since it was acknowledged? Well rules: any numeric condition moved >10% further past its threshold.
+  // Test/event rules: a matching item that wasn't there when it was acknowledged.
+  function resurfaced(flag, rule, ack, fact) {
+    if (flag.items) {
+      const known = new Set(ack.item_ids || []);
+      const fresh = flag.items.filter(it => !known.has(it.record_id || it.event_id));
+      return fresh.length ? `new since acknowledged: ${(DATASETS[rule.dataset].describe)(fresh[0])}` : null;
     }
+    for (const cn of rule.conditions) {
+      const old = (ack.ack_values || {})[cn.field], cur = fact[cn.field];
+      if (isEmpty(old) || isEmpty(cur) || !['gt', 'gte', 'lt', 'lte'].includes(cn.op)) continue;
+      const d = ['gt', 'gte'].includes(cn.op) ? cur - old : old - cur;
+      if (d > Math.max(Math.abs(Number(old)) * 0.1, 1e-9)) return `${fieldOf('well', cn.field)?.label || cn.field} worsened from ${fmtVal(cn.field, old)} to ${fmtVal(cn.field, cur)} since acknowledged`;
+    }
+    return null;
+  }
+  // Snapshot stored with an acknowledgement so we can tell later whether the flag got worse.
+  function ackSnapshot(flag, rule, fact) {
+    if (flag.items) return {item_ids: flag.items.map(it => it.record_id || it.event_id)};
+    return {ack_values: Object.fromEntries(rule.conditions.map(cn => [cn.field, fact[cn.field] ?? null]))};
+  }
+
+  /* Three tiers instead of one score:
+       safety     - a Critical/Warning safety flag (when safetyFirst): ordered by severity, then safety points
+       production - other Critical/Warning flags: ordered by $/day at risk (mode 'value'), fastest payback ('payback') or points ('score')
+       watch      - only Review-level flags
+       handled    - every flag acknowledged as being handled (and not worse since) - listed separately, out of the top 10
+     Points: rules in the same group count once (highest weight). opts.acks / opts.estimates are keyed "well_id|rule_id". */
+  function rank(facts, rules, asOf, mode, engineer, items, opts) {
+    opts = opts || {};
+    const safetyFirst = opts.safetyFirst !== false, acks = opts.acks || {}, est = opts.estimates || {}, asOfD = toDate(asOf);
+    const ruleBy = Object.fromEntries(rules.map(r => [r.id, r]));
+    const ex = evaluate(facts.filter(f => !engineer || f.engineer_id === engineer), rules, asOf, items);
     const fact = Object.fromEntries(facts.map(f => [f.well_id, f]));
-    const tier = b => !safetyFirst ? 0 : b.safety_worst === 'Critical' ? 0 : b.safety_worst === 'Warning' ? 1 : 2;
-    const res = Object.values(by).map(b => Object.assign(b, {value: Number(fact[b.well_id].value_at_risk_cad_day || 0), fact: fact[b.well_id], tier: tier(b)}));
-    res.sort(mode === 'value' ? (a, b) => (a.tier - b.tier) || (b.value - a.value) || (b.score - a.score) : (a, b) => (a.tier - b.tier) || (b.score - a.score) || (b.value - a.value));
+    const by = {};
+    for (const e of ex) (by[e.well_id] = by[e.well_id] || []).push(e);
+    const res = [];
+    for (const [wid, flags] of Object.entries(by)) {
+      const fc = fact[wid];
+      for (const f of flags) {
+        const r = ruleBy[f.rule_id]; f.weight = Number(r.weight || 0); f.group = r.group || null; f.safety = isSafety(f);
+        const a = acks[wid + '|' + f.rule_id];
+        if (a && !a.cleared && (!a.until_date || toDate(a.until_date) >= asOfD)) {
+          const why = resurfaced(f, r, a, fc);
+          if (why) f.resurfaced = why; else f.handled = {type: 'ack', note: a.note, until: a.until_date, by: a.acked_by};
+        }
+        if (!f.handled && !f.safety && opts.woHandled && Number(fc.open_work_orders) > 0) f.handled = {type: 'work_order', note: fc.open_work_order};
+        f.fix_cost = !f.safety ? (est[wid + '|' + f.rule_id] ?? r.fix_cost ?? null) : null;
+        f.fix_cost_source = est[wid + '|' + f.rule_id] !== undefined ? 'your estimate' : r.fix_cost ? 'rule default' : null;
+      }
+      const open = flags.filter(f => !f.handled);
+      // count each group once (highest weight wins)
+      const best = {};
+      for (const f of open) { const k = f.group || f.rule_id; if (!best[k] || f.weight > best[k].weight) best[k] = f; }
+      for (const f of open) { f.counted = best[f.group || f.rule_id] === f; if (!f.counted) f.counted_with = best[f.group].rule_name; }
+      const counted = open.filter(f => f.counted);
+      const score = counted.reduce((s, f) => s + f.weight, 0);
+      const safetyOpen = open.filter(f => f.safety && f.severity !== 'Review');
+      const worstOf = fs => fs.reduce((w, f) => (w === null || SEV[f.severity] < SEV[w]) ? f.severity : w, null);
+      const costs = {}; for (const f of open.filter(f => !f.safety && f.fix_cost !== null && f.fix_cost !== undefined && f.fix_cost !== '')) { const k = f.group || f.rule_id; costs[k] = Math.max(costs[k] || 0, Number(f.fix_cost)); }
+      const fixCost = Object.keys(costs).length ? Object.values(costs).reduce((a, b) => a + b, 0) : null;
+      // dollars per day: oil lost against the type curve, plus the daily operating loss on wells that cost more to run than they earn
+      const opLoss = Number(fc.operating_margin_oct_cad) < 0 ? Math.round(-Number(fc.operating_margin_oct_cad) / 31) : 0;
+      const value = Number(fc.value_at_risk_cad_day || 0) + opLoss;
+      const tier = !open.length ? 'handled' : (safetyFirst && safetyOpen.length) ? 'safety' : open.some(f => f.severity !== 'Review') ? 'production' : 'watch';
+      res.push({well_id: wid, fact: fc, flags: flags.sort((a, b) => (!!a.handled - !!b.handled) || (SEV[a.severity] - SEV[b.severity]) || (b.weight - a.weight)),
+        score, safety_score: counted.filter(f => f.safety).reduce((s, f) => s + f.weight, 0),
+        worst: worstOf(open) || worstOf(flags), safety_worst: worstOf(open.filter(f => f.safety)), safety: open.some(f => f.safety),
+        value, value_parts: {lost_oil: Number(fc.value_at_risk_cad_day || 0), operating_loss: opLoss}, fix_cost: fixCost, payback_days: fixCost && value > 0 ? Math.round(fixCost / value) : null,
+        tier, tierN: TIERS.indexOf(tier), handled_count: flags.filter(f => f.handled).length});
+    }
+    const prodSort = {value: (a, b) => (b.value - a.value) || (b.score - a.score),
+                      payback: (a, b) => ((a.payback_days ?? 1e12) - (b.payback_days ?? 1e12)) || (b.value - a.value) || (b.score - a.score),
+                      score: (a, b) => (b.score - a.score) || (b.value - a.value)}[mode] || ((a, b) => (b.value - a.value) || (b.score - a.score));
+    res.sort((a, b) => (a.tierN - b.tierN) ||
+      (a.tier === 'safety' ? (SEV[a.safety_worst] - SEV[b.safety_worst]) || (b.safety_score - a.safety_score) || (b.score - a.score) || (b.value - a.value)
+       : a.tier === 'production' ? prodSort(a, b) : (b.score - a.score) || (b.value - a.value)));
     return res;
   }
 
@@ -307,6 +375,7 @@
     if (r.weight === '' || isNaN(Number(r.weight)) || Number(r.weight) < 0) errs.push('Weight must be a number of points (0 or more).');
     if (ds !== 'well' && (isNaN(Number(r.min_count || 1)) || Number(r.min_count || 1) < 1)) errs.push('"At least" must be 1 or more.');
     if (!r.conditions || !r.conditions.length) errs.push('Add at least one condition.');
+    if (r.fix_cost !== undefined && r.fix_cost !== null && r.fix_cost !== '' && (isNaN(Number(r.fix_cost)) || Number(r.fix_cost) < 0)) errs.push('Typical fix cost must be a dollar amount (0 or more), or left empty.');
     (r.conditions || []).forEach((cn, i) => {
       const f = fieldOf(ds, cn.field); if (!f) { errs.push(`Condition ${i + 1}: pick a field.`); return; }
       if (!OPS[f.type].some(([o]) => o === cn.op)) errs.push(`Condition ${i + 1}: pick an operator.`);
@@ -316,6 +385,6 @@
     return errs;
   }
 
-  const api = {DATASETS, FIELDS: WELL_FIELDS, FIELD: maps.well, fieldOf, setCustomFields, OPS, NEEDS_VALUE, NEEDS_FIELD, DEFAULT_RULES, evaluate, rank, validateRule, fill, fmtVal, isSafety};
+  const api = {GROUPS, FIX_COSTS, TIERS, ackSnapshot, DATASETS, FIELDS: WELL_FIELDS, FIELD: maps.well, fieldOf, setCustomFields, OPS, NEEDS_VALUE, NEEDS_FIELD, DEFAULT_RULES, evaluate, rank, validateRule, fill, fmtVal, isSafety};
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.FlagEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

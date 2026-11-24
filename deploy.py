@@ -38,7 +38,7 @@ print("app", app.name, "sp", sp, "compute", app.compute_status.state if app.comp
 for g in [f"GRANT USE CATALOG ON CATALOG workspace TO `{sp}`",
           f"GRANT USE SCHEMA, SELECT ON SCHEMA {SCHEMA} TO `{sp}`",
           *[f"GRANT MODIFY ON TABLE {SCHEMA}.{t} TO `{sp}`" for t in ("app_flag_rules", "app_flag_settings", "app_compliance_entries", "app_safety_event_entries",
-                                                                     "app_event_updates", "app_custom_fields", "app_well_attributes")]]:
+                                                                     "app_event_updates", "app_custom_fields", "app_well_attributes", "app_flag_acks", "app_fix_estimates")]]:
     sql(w, g, WH)
 print("grants done")
 

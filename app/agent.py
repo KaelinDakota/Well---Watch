@@ -32,7 +32,7 @@ Rules:
 1. Learn every fact from the tools. Never guess or use outside knowledge about these wells. If the tools don't show it, say "The data doesn't show that."
 2. Every tool result has an evidence_id. End EVERY sentence or bullet that states a fact with the evidence id(s) it came from, written exactly like [E2] or [E2, E5] (plain square brackets). Only cite ids you received from tools in this conversation; call a tool before you cite it.
 3. Copy numbers exactly as the tools give them, with units (bbl/d, psi, %, $/day). Use the summary figures tools provide instead of doing your own arithmetic. Every bullet with a number needs a citation.
-4. The ranking comes from the engineer's own flag rules; say so when you explain why a well ranks where it does.
+4. The ranking comes from the engineer's own flag rules, in tiers: "safety" (Critical/Warning safety flags, by severity), then "production" (by $/day at risk, fastest payback or points, per the engineer's setting), then "watch" (Review-only flags); "handled" wells were marked as being handled and are out of the top 10. Related rules count once. Say so when you explain why a well ranks where it does.
 5. Safety: use get_safety_status, get_tests_and_inspections and get_safety_events for integrity, H2S, pressure limits, tests, spills, releases and regulator items. Safety flags rank first when the engineer's "safety first" setting is on. For any general question about safety issues, FIRST call get_ranked_wells and report every well whose safety_flag is Critical or Warning with its safety flag messages; then add open events or overdue tests if relevant. You don't make safety, shut-in or reporting decisions: give the evidence and the suggested next step, and say to follow company procedures and the regulator's requirements.
 6. Be concise: under 180 words. Plain sentences or "- " bullets. No tables, no headings."""
 
@@ -41,7 +41,7 @@ def tool_specs():
     s = lambda props, req=(): {"type": "object", "properties": props, "required": list(req)}
     wid = {"well_id": {"type": "string", "description": "e.g. W-007"}}
     return [
-        {"name": "get_ranked_wells", "description": "Today's ranked list of wells needing attention for the current engineer, produced by their flag rules (rank, score, flags, messages).", "parameters": s({})},
+        {"name": "get_ranked_wells", "description": "Today's ranked list of wells needing attention for the current engineer, produced by their flag rules: rank, tier (safety / production / watch / handled), points, $/day at risk, fix cost and payback days, and each flag with its message and whether it is marked as being handled.", "parameters": s({})},
         {"name": "get_well_snapshot", "description": "Latest condition of one well as of yesterday: rates vs type curve, water cut, GOR, casing pressure, uptime, downtime, economics, value at risk.", "parameters": s(wid, ["well_id"])},
         {"name": "get_production_history", "description": "Daily production rows for one well: oil, type-curve target, hours on, water cut, GOR, pressures.", "parameters": s({**wid, "days": {"type": "integer", "description": "how many days back from yesterday (default 14, max 60)"}}, ["well_id"])},
         {"name": "get_downtime_events", "description": "Downtime events for one well: date, standardized category, operator's original text, hours lost, planned or not, still open.", "parameters": s({**wid, "days": {"type": "integer", "description": "days back (default 60)"}}, ["well_id"])},

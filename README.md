@@ -40,7 +40,24 @@ The app flags and informs. Decisions on shut-in, repair and reporting stay with 
 
 ## How the ranking works
 
-Each rule is plain JSON: conditions on snapshot fields, a severity and a weight in points. A well's score is the sum of the weights of the rules it trips. Ties break on value at risk ($/day), or the engineer can switch to ranking by value at risk outright. Rules are saved per engineer to `well_ops.app_flag_rules`. No AI decides a flag.
+Rules are plain JSON: conditions, a severity, a weight in points, and optionally a **group** and a **typical fix cost**. No AI decides a flag. Ranking happens in tiers, in the way production engineers usually work through their list.
+
+1. **Safety.** Wells with a Critical or Warning safety flag, most severe first. This tier is on by default; turn off "Safety first" to drop it.
+2. **Production and cost.** Other Critical or Warning flags. The engineer chooses the sort order:
+   - **$/day at risk** (default): oil lost against the type curve, plus the daily operating loss on wells that cost more to run than they earn.
+   - **Fastest payback**: fix cost ÷ $/day. A fix cost comes from the rule's default or the engineer's own estimate for that well.
+   - **Points.**
+3. **Watch list.** Wells with only Review-level flags, ordered by points.
+4. **Being handled.** Flags an engineer marked as being handled, with an end date and a note (required for safety flags). They leave the top 10 and come back on their own when:
+   - the end date passes;
+   - a condition moves more than 10% further past its threshold;
+   - a new matching test or event appears.
+
+   Optionally, wells with an open work order can count as being handled for production flags only. This is off by default.
+
+Points still break ties. Rules in the same group, such as "casing pressure near MAASP" and "casing pressure rising", count once at the highest weight instead of adding up. The starter fix costs are rough placeholders; engineers should replace them with their own numbers.
+
+Saved to: `app_flag_rules`, `app_flag_settings`, `app_flag_acks` and `app_fix_estimates` (created by `pipeline/05_ranking.sql`).
 
 ## How the assistant stays grounded
 
@@ -65,7 +82,7 @@ Each rule is plain JSON: conditions on snapshot fields, a severity and a weight 
 ## Run it
 
 1. Upload the files from `dataset/raw/` to `/Volumes/workspace/well_ops/landing/`.
-2. Run `pipeline/01–04` in order (`python run_sql.py pipeline/01_bronze.sql`, …).
+2. Run `pipeline/01–05` in order (`python run_sql.py pipeline/01_bronze.sql`, …).
 3. Run `python deploy.py`.
 
 The app needs a serverless SQL warehouse and access to the `databricks-gpt-oss-120b` endpoint. You can change the endpoint in `deploy.py`.

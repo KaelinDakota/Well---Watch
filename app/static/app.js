@@ -12,9 +12,8 @@
   const api = async (path, opts) => { const r = await fetch(path, opts); if (!r.ok) throw new Error((await r.text()).slice(0, 300) || r.statusText); return r.json(); };
   const post = (path, body, method = 'POST') => api(path, {method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   const lin = o => `data-lin='${esc(JSON.stringify(o))}'`;
-  const SAFETY_RANK_NOTE = 'Safety first is on: wells with a Critical or Warning safety flag are listed before all others.';
 
-  let D = null, ENG = null, RULES = [], MODE = 'score', SAFETY_FIRST = true, RANK = [], ITEMS = {test: [], event: []}, view = 'day', rulesSource = 'default', showAll = false;
+  let D = null, ENG = null, RULES = [], MODE = 'value', SAFETY_FIRST = true, WO_HANDLED = false, ACKS = {}, EST = {}, RANK = [], ITEMS = {test: [], event: []}, view = 'day', rulesSource = 'default', showAll = false;
   let wellSort = {k: 'score', dir: -1}, wellFilter = '', ruleFilter = 'All';
   const chat = {id: null, busy: false, evidence: {}};
 
@@ -28,7 +27,7 @@
       const v = (attrs[w.well_id] || {})[c.field_key];
       w['x_' + c.field_key] = v === undefined || v === null || v === '' ? null : types[c.field_key] === 'number' ? Number(v) : types[c.field_key] === 'yesno' ? v === 'true' : v;
     }
-    D.attrs = attrs; ITEMS = D.items;
+    D.attrs = attrs; ITEMS = D.items; D.settings = D.settings || {}; D.acks = D.acks || []; D.estimates = D.estimates || [];
   }
   async function init() {
     try { await loadBundle(); } catch (e) { $('#main').innerHTML = `<div class="empty">Could not load data: ${esc(e.message)}</div>`; return; }
@@ -53,14 +52,25 @@
   function loadRules() {
     const s = D.saved_rules[ENG];
     if (s) {
-      RULES = s.rules; MODE = s.mode || 'score'; rulesSource = 'saved';
+      RULES = s.rules; MODE = s.mode || 'value'; rulesSource = 'saved';
+      // fill in groups and typical fix costs for starter rules saved before those existed
+      for (const r of RULES) { if (r.group === undefined && F.GROUPS[r.id]) r.group = F.GROUPS[r.id]; if (r.fix_cost === undefined && F.FIX_COSTS[r.id]) r.fix_cost = F.FIX_COSTS[r.id]; }
       // rule sets saved before the safety pack existed get it added once
       if (!RULES.some(r => String(r.id).startsWith('SAFE_'))) RULES = clone(F.DEFAULT_RULES.filter(r => String(r.id).startsWith('SAFE_'))).concat(RULES);
-    } else { RULES = clone(F.DEFAULT_RULES); MODE = 'score'; rulesSource = 'default'; }
-    SAFETY_FIRST = D.safety_first[ENG] === undefined || D.safety_first[ENG] === null ? true : !!D.safety_first[ENG];
+    } else { RULES = clone(F.DEFAULT_RULES); MODE = 'value'; rulesSource = 'default'; }
+    const st = D.settings[ENG] || {};
+    SAFETY_FIRST = st.safety_first === undefined || st.safety_first === null ? true : !!st.safety_first;
+    WO_HANDLED = !!st.wo_handled;
     recompute();
   }
-  function recompute() { RANK = F.rank(D.snapshot, RULES, D.today, MODE, ENG, ITEMS, {safetyFirst: SAFETY_FIRST}); }
+  function recompute() {
+    ACKS = {}; EST = {};
+    for (const a of D.acks.filter(a => a.engineer_id === ENG)) { let snap = {}; try { snap = JSON.parse(a.snapshot_json || '{}'); } catch (e) {} ACKS[a.well_id + '|' + a.rule_id] = Object.assign({}, a, snap); }
+    for (const e of D.estimates.filter(e => e.engineer_id === ENG)) if (e.cost_cad !== null && e.cost_cad !== undefined) EST[e.well_id + '|' + e.rule_id] = e.cost_cad;
+    RANK = F.rank(D.snapshot, RULES, D.today, MODE, ENG, ITEMS, {safetyFirst: SAFETY_FIRST, acks: ACKS, estimates: EST, woHandled: WO_HANDLED});
+  }
+  const ACTIVE = () => RANK.filter(r => r.tier !== 'handled');
+  const SORT_LABEL = () => ({value: '$/day at risk', payback: 'fastest payback (fix cost ÷ $/day)', score: 'points'})[MODE] || '$/day at risk';
   const myWells = () => D.snapshot.filter(w => w.engineer_id === ENG);
   const myIds = () => new Set(myWells().map(w => w.well_id));
   const engName = () => (D.engineers.find(e => e.engineer_id === ENG) || {}).engineer_name;
@@ -68,8 +78,8 @@
   function render() {
     document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
     const ids = myIds();
-    $('#c-day').textContent = Math.min(10, RANK.length); $('#c-wells').textContent = ids.size; $('#c-rules').textContent = RULES.filter(r => r.enabled).length;
-    $('#c-safety').textContent = RANK.filter(r => r.safety_worst === 'Critical' || r.safety_worst === 'Warning').length;
+    $('#c-day').textContent = Math.min(10, ACTIVE().length); $('#c-wells').textContent = ids.size; $('#c-rules').textContent = RULES.filter(r => r.enabled).length;
+    $('#c-safety').textContent = RANK.filter(r => r.tier === 'safety').length;
     ({day: renderDay, wells: renderWells, safety: renderSafety, rules: renderRules})[view]();
   }
   function bindCommon(root = document) {
@@ -81,48 +91,95 @@
 
   // ---------------- My day ----------------
   function renderDay() {
-    const mine = myWells(), crit = RANK.filter(r => r.worst === 'Critical').length, saf = RANK.filter(r => r.safety_worst === 'Critical' || r.safety_worst === 'Warning').length;
-    const var_ = RANK.reduce((s, r) => s + r.value, 0), oil = mine.reduce((s, w) => s + (w.oil_7d_bopd || 0), 0), tgt = mine.reduce((s, w) => s + (w.target_7d_bopd || 0), 0);
-    const list = showAll ? RANK : RANK.slice(0, 10);
-    let lastTier = null;
+    const mine = myWells(), act = ACTIVE(), handled = RANK.filter(r => r.tier === 'handled');
+    const saf = act.filter(r => r.tier === 'safety').length, prod = act.filter(r => r.tier === 'production');
+    const var_ = prod.reduce((s, r) => s + r.value, 0), oil = mine.reduce((s, w) => s + (w.oil_7d_bopd || 0), 0), tgt = mine.reduce((s, w) => s + (w.target_7d_bopd || 0), 0);
+    const list = showAll ? act : act.slice(0, 10);
+    const head = {safety: ['Safety', 'Deal with these first, most severe first.'], production: ['Production and cost', `Ranked by ${SORT_LABEL()}.`], watch: ['Watch list', 'Review-level items, by points.']};
+    let last = null;
     $('#main').innerHTML = `<div class="kpis six">
         <div class="kpi"><div class="n">${mine.length}</div><div class="l">wells assigned to ${esc(engName())}</div></div>
-        <div class="kpi crit"><div class="n">${saf}</div><div class="l">wells with a safety flag</div></div>
-        <div class="kpi warn"><div class="n">${RANK.length}</div><div class="l">wells flagged by your rules</div></div>
-        <div class="kpi crit"><div class="n">${crit}</div><div class="l">with a critical flag</div></div>
-        <div class="kpi"><div class="n">${fmt(oil)}</div><div class="l">bbl/d oil, last 7 days (type curve ${fmt(tgt)})</div></div>
-        <div class="kpi"><div class="n">$${fmt(var_)}</div><div class="l">per day at risk on flagged wells</div></div></div>
-      <div class="bar"><b style="font-size:16px">${showAll ? 'All flagged wells' : 'Top 10 to look at today'}</b>
-        <span class="note">${SAFETY_FIRST ? 'Safety first, then ' : ''}${MODE === 'value' ? 'value at risk ($/day), then flag score' : 'flag score (sum of rule weights), then value at risk'} · ${rulesSource === 'saved' ? 'your saved rules' : 'default rules'} · <a class="lk" id="torules">change rules</a></span>
-        ${RANK.length > 10 ? `<button class="btn sec small" id="more" style="margin-left:auto">${showAll ? 'Show top 10' : `Show all ${RANK.length}`}</button>` : ''}</div>
-      <div class="card">${list.length ? list.map((r, i) => { const t = SAFETY_FIRST && r.tier !== lastTier ? `<div class="tier">${r.tier === 0 ? 'Critical safety' : r.tier === 1 ? 'Safety warnings' : 'Production and other flags'}</div>` : ''; lastTier = r.tier; return t + wellCard(r, i + 1); }).join('')
-        : '<div class="empty">None of your wells match your enabled rules today.</div>'}</div>
-      ${!showAll && RANK.length > 10 ? `<div class="note" style="margin-top:8px">${RANK.length - 10} more flagged well(s) below the top 10: ${RANK.slice(10).map(r => `<a class="lk" data-well="${r.well_id}">${r.well_id}</a>`).join(', ')}</div>` : ''}`;
+        <div class="kpi crit"><div class="n">${saf}</div><div class="l">wells with a safety issue</div></div>
+        <div class="kpi warn"><div class="n">${prod.length}</div><div class="l">wells losing production or money</div></div>
+        <div class="kpi"><div class="n">$${fmt(var_)}</div><div class="l">per day at risk on those wells</div></div>
+        <div class="kpi"><div class="n">${handled.length}</div><div class="l">marked as being handled</div></div>
+        <div class="kpi"><div class="n">${fmt(oil)}</div><div class="l">bbl/d oil, last 7 days (type curve ${fmt(tgt)})</div></div></div>
+      <div class="bar"><b style="font-size:16px">${showAll ? 'Everything that needs attention' : 'Top 10 to look at today'}</b>
+        <span class="note">${SAFETY_FIRST ? 'Safety first, then production and cost by ' + SORT_LABEL() : 'Ranked by ' + SORT_LABEL()}, then the watch list · related rules count once · <a class="lk" id="torules">change rules</a></span>
+        ${act.length > 10 ? `<button class="btn sec small" id="more" style="margin-left:auto">${showAll ? 'Show top 10' : `Show all ${act.length}`}</button>` : ''}</div>
+      <div class="card">${list.length ? list.map((r, i) => { const t = r.tier !== last ? `<div class="tier">${head[r.tier][0]} <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)">· ${head[r.tier][1]}</span></div>` : ''; last = r.tier; return t + wellCard(r, i + 1); }).join('')
+        : '<div class="empty">Nothing needs attention under your current rules.</div>'}</div>
+      ${!showAll && act.length > 10 ? `<div class="note" style="margin-top:8px">${act.length - 10} more below the top 10: ${act.slice(10).map(r => `<a class="lk" data-well="${r.well_id}">${r.well_id}</a>`).join(', ')}</div>` : ''}
+      ${handled.length ? `<h3>Being handled (${handled.length}) <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· off the list until the date passes, or sooner if the problem gets worse</span></h3>
+        <div class="card">${handled.map(r => `<div class="wcard"><div class="rk">–</div><div><div class="t"><a data-well="${r.well_id}">${r.well_id} · ${esc(r.fact.well_name)}</a></div></div><div></div>${r.flags.map(flagHtml).join('')}</div>`).join('')}</div>` : ''}`;
     $('#torules').onclick = () => go('rules');
     if ($('#more')) $('#more').onclick = () => { showAll = !showAll; render(); };
-    bindCommon($('#main'));
+    bindCommon($('#main')); bindFlagActions($('#main'));
     document.querySelectorAll('[data-trace-snap]').forEach(a => a.onclick = () => lineage({kind: F.isSafety({category: a.dataset.cat}) ? 'safety_snapshot' : 'snapshot', well_id: a.dataset.traceSnap}));
   }
   function flagHtml(f) {
     const chips = f.items ? f.evidence.map(e => `<span class="chip hit lk2" ${lin(itemLin(e.item))} title="Trace this record">${esc(e.value)}</span>`).join('')
       : f.evidence.map(e => `<span class="chip ${e.matched ? 'hit' : ''}">${esc(e.label)}: ${esc(e.value)}</span>`).join('');
-    return `<div class="flag"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? '<span class="shield">SAFETY</span>' : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}</div>
-      <div class="chips">${chips}</div>${f.action ? `<div class="act">Next step: ${esc(f.action)}</div>` : ''}</div>`;
+    const key = esc(JSON.stringify({w: f.well_id, r: f.rule_id}));
+    const h = f.handled, meta = [];
+    if (!h) meta.push(`${f.weight} pts${f.counted === false ? ` <span class="muted">(not added: counted once with "${esc(f.counted_with)}")</span>` : ''}`);
+    if (!h && f.fix_cost !== null && f.fix_cost !== undefined) meta.push(`fix ≈ $${fmt(f.fix_cost)} <span class="muted">(${esc(f.fix_cost_source)})</span>`);
+    const acts = h ? (h.type === 'ack' ? `<a class="lk" data-unack='${key}'>no longer being handled</a>` : '')
+      : `<a class="lk" data-ack='${key}'>mark as being handled</a>${!f.safety ? ` · <a class="lk" data-est='${key}'>${EST[f.well_id + '|' + f.rule_id] !== undefined ? 'change' : 'add'} fix cost estimate</a>` : ''}`;
+    return `<div class="flag" style="${h ? 'opacity:.6' : ''}"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? '<span class="shield">SAFETY</span>' : ''}${f.resurfaced ? '<span class="shield" style="background:#c9822b">BACK</span>' : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}</div>
+      ${f.resurfaced ? `<div class="act" style="color:#8a5a10">Back on the list: ${esc(f.resurfaced)}.</div>` : ''}
+      ${h ? `<div class="act"><b>Being handled</b>${h.type === 'ack' ? ` until ${esc(String(h.until).slice(0, 10))} by ${esc(h.by || '')}` : ' (open work order)'}${h.note ? ` · ${esc(h.note)}` : ''}</div>` : ''}
+      <div class="chips">${chips}</div>${f.action && !h ? `<div class="act">Next step: ${esc(f.action)}</div>` : ''}
+      <div class="act small">${meta.join(' · ')}${meta.length ? ' · ' : ''}${acts}</div></div>`;
   }
   function wellCard(r, n) {
     const w = r.fact;
+    const side = r.tier === 'production'
+      ? `<div class="score">$${fmt(r.value)}/day</div><div class="val">${r.value_parts.operating_loss ? `$${fmt(r.value_parts.lost_oil)} lost oil + $${fmt(r.value_parts.operating_loss)} operating loss` : 'lost oil vs type curve'}</div>
+         <div class="val">${r.fix_cost ? `fix ≈ $${fmt(r.fix_cost)}${r.payback_days ? ` · pays back in ~${fmt(r.payback_days)} days` : ''}` : 'no fix cost estimate'}</div><div class="val">${r.score} pts</div>`
+      : r.tier === 'safety' ? `<div class="score" style="color:var(--crit)">${r.safety_worst}</div><div class="val">${r.safety_score} safety pts · ${r.score} total</div>`
+      : `<div class="score">${r.score} pts</div>`;
     return `<div class="wcard"><div class="rk">${n}</div>
       <div><div class="t"><a data-well="${w.well_id}">${w.well_id} · ${esc(w.well_name)}</a></div>
-        <div class="meta">${esc(w.reservoir)} · ${esc(w.lift_type)} · ${esc(w.area)} · ${esc(w.sour_class || '')} · ${fmt(w.oil_7d_bopd, 1)} bbl/d vs ${fmt(w.target_7d_bopd, 1)} type curve</div></div>
-      <div class="side"><div class="score">${r.score} pts</div><div class="val">$${fmt(r.value)}/day at risk</div></div>
+        <div class="meta">${esc(w.reservoir)} · ${esc(w.lift_type)} · ${esc(w.area)} · ${esc(w.sour_class || '')} · ${fmt(w.oil_7d_bopd, 1)} bbl/d vs ${fmt(w.target_7d_bopd, 1)} type curve${Number(w.open_work_orders) > 0 ? ` · open work order: ${esc(w.open_work_order)}` : ''}</div></div>
+      <div class="side">${side}</div>
       ${r.flags.map(flagHtml).join('')}
       <div class="wactions"><button class="btn sec small" data-well="${w.well_id}">Open well</button><button class="btn sec small" data-ask="${w.well_id}">Ask why</button>
         <button class="btn sec small" data-trace-snap="${w.well_id}" data-cat="${esc(r.flags[0].category)}">Trace these numbers</button></div></div>`;
   }
+  function bindFlagActions(root) {
+    const find = k => { const {w, r} = JSON.parse(k); const rr = RANK.find(x => x.well_id === w); return {rk: rr, f: rr && rr.flags.find(f => f.rule_id === r), rule: RULES.find(x => x.id === r)}; };
+    root.querySelectorAll('[data-ack]').forEach(a => a.onclick = e => { e.stopPropagation(); ackForm(find(a.dataset.ack)); });
+    root.querySelectorAll('[data-unack]').forEach(a => a.onclick = async e => { e.stopPropagation(); const {f} = find(a.dataset.unack);
+      await post('api/acks', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, cleared: true}); await refresh('Back on the list'); });
+    root.querySelectorAll('[data-est]').forEach(a => a.onclick = e => { e.stopPropagation(); estForm(find(a.dataset.est)); });
+  }
+  const addDays = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  function ackForm({rk, f, rule}) {
+    const wo = Number(rk.fact.open_work_orders) > 0 ? rk.fact.open_work_order : '';
+    formModal(`Mark as being handled: ${f.rule_name} on ${f.well_id}`, `<div class="note">It leaves the list until the date below. It comes back sooner if it gets worse${f.items ? ' (a new matching record appears)' : ' (a condition moves more than 10% further past its threshold)'}.${f.safety ? ' <b>Safety flag: a note on who is handling it and how is required.</b>' : ''}</div>
+      <div class="frm"><div><label>Until</label><input id="a-until" type="date" min="${D.today}" max="${addDays(D.today, 30)}" value="${addDays(D.today, 7)}"></div><div></div>
+      <div class="full"><label>Note${f.safety ? ' (required)' : ''}</label><textarea id="a-note" placeholder="e.g. Pump change booked for Nov 26, Rig 4">${esc(wo ? 'Open work order ' + wo : '')}</textarea></div></div>`, async () => {
+        if (f.safety && !val('a-note').trim()) throw new Error('Add a note on who is handling it and how.');
+        await post('api/acks', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, until_date: val('a-until'), note: val('a-note'), safety: !!f.safety, snapshot: F.ackSnapshot(f, rule, rk.fact)});
+        $('#modal').hidden = true; await refresh('Marked as being handled');
+      });
+  }
+  function estForm({f, rule}) {
+    const cur = EST[f.well_id + '|' + f.rule_id];
+    formModal(`Fix cost estimate: ${f.rule_name} on ${f.well_id}`, `<div class="note">Used to rank production problems by payback (cost ÷ $/day at risk). The rule's default is ${rule.fix_cost ? '$' + fmt(rule.fix_cost) : 'not set'}. Leave empty to use it.</div>
+      <div class="frm"><div><label>Estimated cost to fix (CAD)</label><input id="x-cost" value="${cur ?? ''}" placeholder="${rule.fix_cost || ''}"></div><div></div>
+      <div class="full"><label>Note</label><textarea id="x-note" placeholder="e.g. Quote from service company, rod job only"></textarea></div></div>`, async () => {
+        const c = val('x-cost').replace(/[$,\s]/g, ''); if (c !== '' && isNaN(Number(c))) throw new Error('Enter a dollar amount, or leave it empty.');
+        await post('api/estimates', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, cost_cad: c, note: val('x-note')});
+        $('#modal').hidden = true; await refresh('Estimate saved');
+      });
+  }
 
   // ---------------- My wells ----------------
   function renderWells() {
-    const sc = Object.fromEntries(RANK.map((r, i) => [r.well_id, {score: r.score, rank: i + 1, worst: r.worst, n: r.flags.length, safety: r.safety_worst}]));
+    const act = ACTIVE();
+    const sc = Object.fromEntries(RANK.map(r => [r.well_id, {score: r.score, rank: act.indexOf(r) + 1 || '–', worst: r.worst, n: r.flags.length, safety: r.safety_worst, tier: r.tier}]));
     const cols = [['well_id', 'Well'], ['score', 'Score', 1], ['perf_ratio_7d', 'vs type curve', 1], ['oil_7d_bopd', 'Oil bbl/d', 1], ['water_cut_7d_pct', 'Water cut %', 1],
       ['casing_pct_of_maasp', 'Casing % MAASP', 1], ['sc_psi_max_7d', 'Surf. csg psi', 1], ['h2s_ambient_max_7d_ppm', 'H2S ppm', 1], ['tests_overdue', 'Tests overdue', 1],
       ['open_safety_events', 'Open events', 1], ['uptime_14d_pct', 'Uptime %', 1], ['value_at_risk_cad_day', 'At risk $/d', 1]];
@@ -136,7 +193,7 @@
         <td class="n">${fmt(w.perf_ratio_7d, 2)}×</td><td class="n">${fmt(w.oil_7d_bopd, 1)}</td><td class="n">${fmt(w.water_cut_7d_pct, 1)}</td>
         <td class="n">${fmt(w.casing_pct_of_maasp, 0)}%</td><td class="n">${fmt(w.sc_psi_max_7d, 0)}</td><td class="n">${fmt(w.h2s_ambient_max_7d_ppm)}</td><td class="n">${fmt(w.tests_overdue)}</td>
         <td class="n">${fmt(w.open_safety_events)}</td><td class="n">${fmt(w.uptime_14d_pct, 1)}</td><td class="n">${fmt(w.value_at_risk_cad_day)}</td>
-        <td>${w._f ? `${w._f.safety && w._f.safety !== 'Review' ? '<span class="shield">SAFETY</span>' : ''}<span class="pill ${w._f.worst === 'Critical' ? 'crit' : w._f.worst === 'Warning' ? 'warn' : 'rev'}">${w._f.n} flag${w._f.n > 1 ? 's' : ''}</span>` : '<span class="pill ok">OK</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+        <td>${w._f && w._f.tier === 'handled' ? '<span class="pill">being handled</span>' : w._f ? `${w._f.safety && w._f.safety !== 'Review' ? '<span class="shield">SAFETY</span>' : ''}<span class="pill ${w._f.worst === 'Critical' ? 'crit' : w._f.worst === 'Warning' ? 'warn' : 'rev'}">${w._f.n} flag${w._f.n > 1 ? 's' : ''}</span>` : '<span class="pill ok">OK</span>'}</td></tr>`).join('')}</tbody></table></div>`;
     $('#wf').oninput = e => { wellFilter = e.target.value; const pos = e.target.selectionStart; renderWells(); $('#wf').focus(); $('#wf').setSelectionRange(pos, pos); };
     document.querySelectorAll('th.s').forEach(th => th.onclick = () => { const k = th.dataset.k; wellSort = {k, dir: wellSort.k === k ? -wellSort.dir : (k === 'well_id' ? 1 : -1)}; renderWells(); });
     bindCommon($('#main'));
@@ -152,7 +209,7 @@
     const events = ITEMS.event.filter(e => ids.has(e.well_id));
     const open = events.filter(e => e.status !== 'Closed').sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
     const recent = events.filter(e => e.days_ago <= 30 && e.status === 'Closed').sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
-    const safeWells = RANK.filter(r => r.flags.some(F.isSafety));
+    const safeWells = RANK.filter(r => r.flags.some(f => F.isSafety(f) && !f.handled));
     const testRow = t => `<tr><td><a class="lk" data-well="${t.well_id}">${t.well_id}</a> <span class="muted small">${esc(name(t.well_id))}</span></td><td>${t.safety_critical ? '<span class="shield">CRITICAL</span>' : ''}${esc(t.test_type)}</td>
       <td>${esc(String(t.last_test_date).slice(0, 10))} · ${esc(t.last_result)}</td><td class="n">${t.overdue ? `<b style="color:var(--crit)">${t.days_overdue} d overdue</b>` : `in ${t.days_until_due} d`}</td>
       <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(t))}>trace</a> · <a class="lk" data-logtest='${esc(JSON.stringify({well_id: t.well_id, test_type: t.test_type, test_group: t.test_group, interval_months: t.interval_months, safety_critical: t.safety_critical}))}'>log result</a></td></tr>`;
@@ -173,7 +230,7 @@
       <div class="secgrid">
         <div class="card"><h4>Wells with safety flags <span class="muted small">${safeWells.length}</span></h4>
           ${tbl(['Well', 'Safety flags'], safeWells.map(r => `<tr><td><a class="lk" data-well="${r.well_id}">${r.well_id}</a><div class="muted small">${esc(r.fact.well_name)}</div></td>
-            <td>${r.flags.filter(F.isSafety).map(f => `<div><span class="sev ${f.severity}" style="display:inline-block;margin-right:6px">${f.severity}</span>${esc(f.rule_name)} <span class="muted small">· ${esc(f.message)}</span></div>`).join('')}</td></tr>`), 'No safety flags from your rules.')}</div>
+            <td>${r.flags.filter(f => F.isSafety(f) && !f.handled).map(f => `<div><span class="sev ${f.severity}" style="display:inline-block;margin-right:6px">${f.severity}</span>${esc(f.rule_name)} <span class="muted small">· ${esc(f.message)}</span></div>`).join('')}</td></tr>`), 'No safety flags from your rules.')}</div>
         <div class="card"><h4>Open safety events <span class="muted small">${open.length}</span></h4>${tbl(['Date', 'Well', 'Event', 'Regulator', ''], open.map(evRow), 'No open events.')}</div>
         <div class="card"><h4>Overdue tests and inspections <span class="muted small">${overdue.length}</span></h4>${tbl(['Well', 'Test', 'Last', 'Due', ''], overdue.map(testRow), 'Nothing overdue.')}</div>
         <div class="card"><h4>Failed tests <span class="muted small">${failed.length}</span></h4>${tbl(['Well', 'Test', 'Last', 'Due', ''], failed.map(testRow), 'No failed tests.')}</div>
@@ -287,7 +344,7 @@
     const myTests = ITEMS.test.filter(t => t.well_id === id).sort((a, b) => a.days_until_due - b.days_until_due);
     const myEvents = ITEMS.event.filter(e => e.well_id === id).sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
     $('#dbody').innerHTML = `
-      <h3>Flags today ${r ? `· ${r.score} pts · rank #${RANK.indexOf(r) + 1}` : ''}</h3>
+      <h3>Flags today ${r ? (r.tier === 'handled' ? '· all being handled' : `· ${r.tier} · rank #${ACTIVE().indexOf(r) + 1} · ${r.score} pts${r.tier === 'production' ? ` · $${fmt(r.value)}/day` : ''}`) : ''}</h3>
       ${r ? `<div style="display:grid;grid-template-columns:44px 1fr auto">${r.flags.map(flagHtml).join('')}</div>` : '<div class="muted">No flags from your rules.</div>'}
       <h3>Safety <a class="lk small" ${lin({kind: 'safety_snapshot', well_id: id})} style="text-transform:none;letter-spacing:0;margin-left:6px">trace →</a></h3>
       <div class="kpis" style="grid-template-columns:repeat(4,1fr)">${sk.map(([l, v]) => `<div class="kpi"><div class="n" style="font-size:14px">${esc(v)}</div><div class="l">${l}</div></div>`).join('')}</div>
@@ -331,7 +388,7 @@
       ${d.work_orders.length ? `<div class="tw"><table><thead><tr><th>WO</th><th>Type</th><th>Description</th><th>Start</th><th>End</th><th>Status</th><th></th></tr></thead><tbody>
         ${d.work_orders.map(o => `<tr><td>${esc(o.wo_number)}</td><td>${esc(o.wo_type)}</td><td>${esc(o.description)}</td><td>${esc(o.start_date)}</td><td>${esc(o.end_date || '')}</td><td>${esc(o.status)}</td>
           <td><a class="lk" ${lin({kind: 'work_order', bronze_id: o._bronze_id})}>trace</a></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">None.</div>'}`;
-    bindCommon($('#dbody'));
+    bindCommon($('#dbody')); bindFlagActions($('#dbody'));
     $('#dlogt').onclick = () => testForm({well_id: id}); $('#dloge').onclick = () => eventForm({well_id: id});
     document.querySelectorAll('#dbody [data-evupd]').forEach(a => a.onclick = () => eventUpdate(a.dataset.evupd));
     if ($('#dcf')) $('#dcf').onclick = () => editWellFields(id);
@@ -421,25 +478,27 @@
     const shown = RULES.map((r, i) => [r, i]).filter(([r]) => ruleFilter === 'All' || (r.category || 'Other') === ruleFilter);
     const missing = F.DEFAULT_RULES.filter(d => !RULES.some(r => r.id === d.id));
     $('#main').innerHTML = `<div class="bar"><button class="btn" id="newrule">+ New rule</button><button class="btn sec" id="lib">Rule library${missing.length ? ` (${missing.length} not in use)` : ''}</button><button class="btn sec" id="reset">Reset to defaults</button>
-        <span style="margin-left:14px" class="note">Rank by</span><div class="seg"><button data-m="score" class="${MODE === 'score' ? 'on' : ''}">Flag score</button><button data-m="value" class="${MODE === 'value' ? 'on' : ''}">Value at risk</button></div>
-        <label class="note" style="display:flex;gap:6px;align-items:center;margin-left:10px;cursor:pointer"><input type="checkbox" id="sf" ${SAFETY_FIRST ? 'checked' : ''}> Safety first</label></div>
-      <div class="note" style="margin-bottom:8px">These are ${esc(engName())}'s rules${rulesSource === 'saved' ? ` (saved ${esc(String(D.saved_rules[ENG]?.saved_at || 'this session').slice(0, 16))})` : ' (defaults; not yet saved)'}. A well's score is the sum of the weights of the rules it trips. ${SAFETY_FIRST ? SAFETY_RANK_NOTE : ''} Rules can look at well readings, at each test or inspection, or at each safety event. No AI decides a flag.</div>
+        <span style="margin-left:14px" class="note">Rank production problems by</span><div class="seg"><button data-m="value" class="${MODE === 'value' ? 'on' : ''}">$/day at risk</button><button data-m="payback" class="${MODE === 'payback' ? 'on' : ''}">Fastest payback</button><button data-m="score" class="${MODE === 'score' ? 'on' : ''}">Points</button></div></div>
+      <div class="bar"><label class="note" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="sf" ${SAFETY_FIRST ? 'checked' : ''}> Safety first (safety issues above everything else)</label>
+        <label class="note" style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-left:14px"><input type="checkbox" id="woh" ${WO_HANDLED ? 'checked' : ''}> Treat wells with an open work order as being handled (production flags only)</label></div>
+      <div class="note" style="margin-bottom:8px">These are ${esc(engName())}'s rules${rulesSource === 'saved' ? ` (saved ${esc(String(D.saved_rules[ENG]?.saved_at || 'this session').slice(0, 16))})` : ' (defaults; not yet saved)'}. Wells are listed in tiers: ${SAFETY_FIRST ? 'safety first, then ' : ''}production and cost problems by ${SORT_LABEL()}, then a watch list. Points (the sum of rule weights, with rules in the same group counted once) break ties. Rules can look at well readings, at each test or inspection, or at each safety event. No AI decides a flag.</div>
       <div class="bar"><div class="filt">${cats.map(c => `<button data-cat="${esc(c)}" class="${ruleFilter === c ? 'on' : ''}">${esc(c)} ${c === 'All' ? RULES.length : RULES.filter(r => (r.category || 'Other') === c).length}</button>`).join('')}</div></div>
       <div class="card">${shown.map(([r, i]) => { const ds = r.dataset || 'well'; return `<div class="rule ${r.enabled ? '' : 'off'}">
         <button class="switch ${r.enabled ? 'on' : ''}" data-i="${i}" title="${r.enabled ? 'Turn off' : 'Turn on'}"></button>
         <div><div><span class="sev ${esc(r.severity)}" style="display:inline-block;margin-right:8px">${esc(r.severity)}</span>${F.isSafety(r) ? '<span class="shield">SAFETY</span>' : ''}<b>${esc(r.name)}</b> <span class="muted small">${esc(r.category || '')}</span><span class="ds">${esc(F.DATASETS[ds].label)}</span></div>
           <div class="cond" style="margin-top:4px">${ds === 'well' ? 'When' : `When at least <b>${r.min_count || 1}</b> ${ds === 'test' ? 'test(s)' : 'event(s)'} have`} ${r.match === 'any' ? '<b>any</b>' : '<b>all</b>'} of: ${r.conditions.map(cn => condText(cn, ds)).join(' · ')}</div>
-          <div class="muted small" style="margin-top:2px">Flags ${counts[r.id] || 0} of your wells now</div></div>
+          <div class="muted small" style="margin-top:2px">Flags ${counts[r.id] || 0} of your wells now${r.group ? ` · group: ${esc(r.group)} (counted once)` : ''}${r.fix_cost ? ` · typical fix ≈ $${fmt(r.fix_cost)}` : ''}</div></div>
         <div style="display:flex;gap:10px;align-items:start"><div class="wt">${r.weight}<small>points</small></div><button class="btn sec small" data-edit="${i}">Edit</button><button class="btn sec small" data-dup="${i}">Copy</button></div></div>`; }).join('')}</div>`;
     document.querySelectorAll('.switch').forEach(b => b.onclick = async () => { const r = RULES[+b.dataset.i]; r.enabled = !r.enabled; await persist(`${r.name} turned ${r.enabled ? 'on' : 'off'}`); });
     document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editRule(+b.dataset.edit));
     document.querySelectorAll('[data-dup]').forEach(b => b.onclick = () => { const cp = clone(RULES[+b.dataset.dup]); cp.id = 'CUSTOM_' + Date.now(); cp.name += ' (copy)'; editRule(null, cp); });
-    document.querySelectorAll('[data-m]').forEach(b => b.onclick = async () => { MODE = b.dataset.m; await persist('Ranking by ' + (MODE === 'value' ? 'value at risk' : 'flag score')); });
+    document.querySelectorAll('[data-m]').forEach(b => b.onclick = async () => { MODE = b.dataset.m; await persist('Production problems ranked by ' + SORT_LABEL()); });
+    $('#woh').onchange = async e => { WO_HANDLED = e.target.checked; await persist(WO_HANDLED ? 'Open work orders count as being handled' : 'Open work orders no longer hide flags'); };
     document.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { ruleFilter = b.dataset.cat; renderRules(); });
     $('#sf').onchange = async e => { SAFETY_FIRST = e.target.checked; await persist(SAFETY_FIRST ? 'Safety flags rank first' : 'Safety flags ranked by score like the rest'); };
     $('#newrule').onclick = () => editRule(null);
     $('#lib').onclick = library;
-    $('#reset').onclick = async () => { RULES = clone(F.DEFAULT_RULES); MODE = 'score'; SAFETY_FIRST = true; await persist('Rules reset to defaults'); };
+    $('#reset').onclick = async () => { RULES = clone(F.DEFAULT_RULES); MODE = 'value'; SAFETY_FIRST = true; WO_HANDLED = false; await persist('Rules reset to defaults'); };
   }
   function library() {
     const draw = () => {
@@ -454,8 +513,8 @@
   }
   async function persist(msg) {
     recompute(); render();
-    try { const r = await post('api/rules/' + ENG, {rules: RULES, mode: MODE, safety_first: SAFETY_FIRST}, 'PUT');
-      D.saved_rules[ENG] = {rules: clone(RULES), mode: MODE, saved_by: r.saved_by, saved_at: new Date().toISOString().replace('T', ' ')}; D.safety_first[ENG] = SAFETY_FIRST; rulesSource = 'saved'; toast(msg + ' · saved'); render();
+    try { const r = await post('api/rules/' + ENG, {rules: RULES, mode: MODE, safety_first: SAFETY_FIRST, wo_handled: WO_HANDLED}, 'PUT');
+      D.saved_rules[ENG] = {rules: clone(RULES), mode: MODE, saved_by: r.saved_by, saved_at: new Date().toISOString().replace('T', ' ')}; D.settings[ENG] = {safety_first: SAFETY_FIRST, wo_handled: WO_HANDLED}; rulesSource = 'saved'; toast(msg + ' · saved'); render();
     } catch (e) { toast('Could not save: ' + e.message); }
   }
   function toast(t) { const el = document.createElement('div'); el.className = 'toast'; el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 3500); }
@@ -478,6 +537,9 @@
           <div><label>Weight (points)</label><input type="text" id="e-wt" value="${esc(r.weight)}"></div>
           <div><label>Category <span class="muted" style="font-weight:400">· "Safety" ranks first</span></label><input type="text" id="e-cat" list="e-cats" value="${esc(r.category || '')}"><datalist id="e-cats"><option value="Safety"><option value="Performance"><option value="Downtime"><option value="Economics"><option value="Data"></datalist></div>
           <div><label>Look at</label><select id="e-ds">${Object.entries(F.DATASETS).map(([k, v]) => `<option value="${k}" ${k === ds ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label>Group <span class="muted" style="font-weight:400">· rules about the same problem count once</span></label><input type="text" id="e-grp" list="e-grps" value="${esc(r.group || '')}" placeholder="optional"><datalist id="e-grps">${[...new Set(RULES.map(x => x.group).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist></div>
+          <div><label>Typical fix cost (CAD) <span class="muted" style="font-weight:400">· for payback ranking; optional</span></label><input type="text" id="e-cost" value="${esc(r.fix_cost ?? '')}" placeholder="e.g. 15000"></div></div>
         <div style="display:grid;grid-template-columns:${item ? '1fr 1fr' : '1fr'};gap:10px">
           <div><label>${item ? `${ds === "test" ? "A test" : "An event"} matches when` : 'Flag a well when'}</label><select id="e-match"><option value="all" ${r.match !== 'any' ? 'selected' : ''}>all conditions are true</option><option value="any" ${r.match === 'any' ? 'selected' : ''}>any condition is true</option></select></div>
           ${item ? `<div><label>Flag the well when at least this many match</label><input type="text" id="e-min" value="${esc(r.min_count || 1)}"></div>` : ''}</div>
@@ -500,6 +562,7 @@
         r.weight = $('#e-wt').value === '' || isNaN(Number($('#e-wt').value)) ? $('#e-wt').value : Number($('#e-wt').value);
         if ($('#e-min')) r.min_count = isNaN(Number($('#e-min').value)) ? $('#e-min').value : Number($('#e-min').value); else delete r.min_count;
         r.message = $('#e-msg').value; r.action = $('#e-act').value;
+        r.group = $('#e-grp').value.trim() || undefined; const fc = $('#e-cost').value.replace(/[$,\s]/g, ''); r.fix_cost = fc === '' ? undefined : (isNaN(Number(fc)) ? fc : Number(fc));
         document.querySelectorAll('.crow').forEach(row => { const cn = r.conditions[+row.dataset.k]; cn.field = row.querySelector('.c-f').value; cn.op = row.querySelector('.c-op').value;
           const v = row.querySelector('.c-v'); const ft = (F.fieldOf(r.dataset, cn.field) || {}).type;
           cn.value = v ? (F.NEEDS_FIELD.has(cn.op) || ft === 'text' ? v.value : (isNaN(Number(v.value)) || v.value === '' ? v.value : Number(v.value))) : undefined; });
@@ -541,7 +604,7 @@
   function newChat() {
     chat.id = null; chat.evidence = {};
     const ex = ['What should I look at first today?', 'Are there any safety issues on my wells?', 'Which of my tests and inspections are overdue?', RANK[0] ? `Why is ${RANK[0].well_id} ranked first?` : null,
-      'Give me a summary of my portfolio.'].filter(Boolean);
+      'Which production problems pay back fastest?'].filter(Boolean);
     $('#msgs').innerHTML = `<div class="muted small">Ask about ${esc(engName() || 'your')}'s wells: production, safety, tests, events. The assistant can only answer from the gold tables and your flag ranking. Every number links to the rows it came from ([E1] chips), and each answer is checked: cited numbers must appear in the cited data. It does not make safety decisions.</div>
       <div class="sugg">${ex.map(q => `<button>${esc(q)}</button>`).join('')}</div>`;
     document.querySelectorAll('.sugg button').forEach(b => b.onclick = () => ask(b.textContent));
@@ -553,10 +616,12 @@
     const sug = $('#msgs .sugg'); if (sug) sug.remove();
     $('#msgs').insertAdjacentHTML('beforeend', `<div class="m u">${esc(q)}</div><div class="m a" id="pending"><span class="muted dots">Looking it up</span></div>`);
     scrollChat();
-    const ranking = RANK.map((r, i) => ({rank: i + 1, well_id: r.well_id, well_name: r.fact.well_name, score: r.score, worst_severity: r.worst, safety_flag: r.safety_worst || 'none',
-      value_at_risk_cad_day: r.value, flags: r.flags.map(f => ({rule: f.rule_name, severity: f.severity, category: f.category, message: f.message}))}));
+    const act = ACTIVE();
+    const ranking = RANK.map(r => ({rank: r.tier === 'handled' ? null : act.indexOf(r) + 1, tier: r.tier, well_id: r.well_id, well_name: r.fact.well_name, points: r.score, worst_severity: r.worst, safety_flag: r.safety_worst || 'none',
+      dollars_per_day_at_risk: r.value, fix_cost_cad: r.fix_cost, payback_days: r.payback_days,
+      flags: r.flags.map(f => ({rule: f.rule_name, severity: f.severity, category: f.category, message: f.message, being_handled: f.handled ? (f.handled.note || 'yes') : false, back_because: f.resurfaced || null}))}));
     try {
-      const res = await post('api/chat', {conversation_id: chat.id, message: q, engineer_id: ENG, engineer_name: engName(), ranking, safety_first: SAFETY_FIRST});
+      const res = await post('api/chat', {conversation_id: chat.id, message: q, engineer_id: ENG, engineer_name: engName(), ranking, safety_first: SAFETY_FIRST, ranking_mode: MODE});
       chat.id = res.conversation_id; Object.assign(chat.evidence, res.evidence);
       $('#pending').outerHTML = `<div class="m a">${renderAnswer(res)}</div>`;
     } catch (e) { $('#pending').outerHTML = `<div class="m a"><span style="color:var(--crit)">Error: ${esc(e.message)}</span></div>`; }

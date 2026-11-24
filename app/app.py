@@ -77,9 +77,13 @@ def bundle():
     saved = query(f"""SELECT engineer_id, rules_json, mode, saved_by, saved_at FROM (
                         SELECT *, row_number() OVER (PARTITION BY engineer_id ORDER BY saved_at DESC) rn FROM {S}.app_flag_rules) WHERE rn = 1""")
     rules = {r["engineer_id"]: {"rules": json.loads(r["rules_json"]), "mode": r["mode"], "saved_by": r["saved_by"], "saved_at": r["saved_at"]} for r in saved}
-    settings = {r["engineer_id"]: r["safety_first"] for r in query(f"""SELECT engineer_id, safety_first FROM (SELECT *, row_number() OVER (PARTITION BY engineer_id ORDER BY saved_at DESC) rn
+    settings = {r["engineer_id"]: {"safety_first": r["safety_first"], "wo_handled": r["wo_handled"]} for r in query(f"""SELECT engineer_id, safety_first, wo_handled FROM (SELECT *, row_number() OVER (PARTITION BY engineer_id ORDER BY saved_at DESC) rn
                                                                     FROM {S}.app_flag_settings) WHERE rn = 1""")}
-    return {"as_of": "2026-11-22", "today": "2026-11-23", "snapshot": snap, "engineers": engineers, "saved_rules": rules, "safety_first": settings,
+    return {"as_of": "2026-11-22", "today": "2026-11-23", "snapshot": snap, "engineers": engineers, "saved_rules": rules, "settings": settings,
+            "acks": query(f"""SELECT engineer_id, well_id, rule_id, until_date, note, snapshot_json, cleared, acked_by, acked_at FROM (SELECT *, row_number() OVER (PARTITION BY engineer_id, well_id, rule_id ORDER BY acked_at DESC) rn
+                               FROM {S}.app_flag_acks) WHERE rn = 1"""),
+            "estimates": query(f"""SELECT engineer_id, well_id, rule_id, cost_cad, note, entered_by, entered_at FROM (SELECT *, row_number() OVER (PARTITION BY engineer_id, well_id, rule_id ORDER BY entered_at DESC) rn
+                                    FROM {S}.app_fix_estimates) WHERE rn = 1"""),
             "items": {"test": query(f"SELECT * FROM {S}.gold_v_compliance_items"), "event": query(f"SELECT * FROM {S}.gold_v_safety_events")},
             "custom_fields": query(f"""SELECT field_key, label, field_type, help FROM (SELECT *, row_number() OVER (PARTITION BY field_key ORDER BY created_at DESC) rn
                                        FROM {S}.app_custom_fields) WHERE rn = 1 AND field_type <> 'deleted' ORDER BY label"""),
@@ -117,12 +121,13 @@ async def save_rules(engineer_id: str, request: Request):
     if not ENG_RE.fullmatch(engineer_id): raise HTTPException(400, "bad engineer id")
     body = await request.json()
     rules, mode = body.get("rules"), body.get("mode", "score")
-    if not isinstance(rules, list) or len(rules) > 100 or mode not in ("score", "value"):
-        raise HTTPException(400, "rules must be a list; mode is score or value")
+    if not isinstance(rules, list) or len(rules) > 100 or mode not in ("score", "value", "payback"):
+        raise HTTPException(400, "rules must be a list; mode is value, payback or score")
     who = request.headers.get("x-forwarded-email") or request.headers.get("x-forwarded-preferred-username") or "unknown"
     query(f"INSERT INTO {S}.app_flag_rules VALUES (:e, :r, :m, :who, current_timestamp())", {"e": engineer_id, "r": json.dumps(rules), "m": mode, "who": who})
-    if "safety_first" in body:
-        query(f"INSERT INTO {S}.app_flag_settings VALUES (:e, cast(:sf AS BOOLEAN), :who, current_timestamp())", {"e": engineer_id, "sf": str(bool(body["safety_first"])).lower(), "who": who})
+    if "safety_first" in body or "wo_handled" in body:
+        query(f"INSERT INTO {S}.app_flag_settings (engineer_id, safety_first, saved_by, saved_at, wo_handled) VALUES (:e, cast(:sf AS BOOLEAN), :who, current_timestamp(), cast(:wo AS BOOLEAN))",
+              {"e": engineer_id, "sf": str(body.get("safety_first", True) is not False).lower(), "wo": str(bool(body.get("wo_handled"))).lower(), "who": who})
     return {"ok": True, "saved_by": who}
 
 
@@ -140,6 +145,41 @@ def _well(v):
     if not (isinstance(v, str) and WELL_RE.fullmatch(v)): raise HTTPException(400, "bad well id")
     return v
 b2s = lambda v: "true" if v in (True, "true", "Y", "yes", 1) else "false"
+
+
+RULE_ID_RE = re.compile(r"[A-Za-z0-9_]{1,60}")
+TODAY = "2026-11-23"
+
+
+@app.post("/api/acks")
+async def ack_flag(request: Request):
+    """Mark a flag as being handled (or clear that). It comes back on its own when until_date passes or the flag gets worse."""
+    b = await request.json()
+    eng, rule = b.get("engineer_id") or "", b.get("rule_id") or ""
+    if not ENG_RE.fullmatch(eng) or not RULE_ID_RE.fullmatch(rule): raise HTTPException(400, "bad engineer or rule id")
+    cleared = bool(b.get("cleared"))
+    until = None if cleared else _date(b.get("until_date"))
+    if until and not (TODAY <= until <= "2026-12-23"): raise HTTPException(400, "until date must be between today and 30 days from today")
+    note = _txt(b.get("note"))
+    if not cleared and b.get("safety") and not note: raise HTTPException(400, "a note is required to mark a safety flag as being handled")
+    snap = b.get("snapshot") or {}
+    if not isinstance(snap, dict) or len(json.dumps(snap)) > 20000: raise HTTPException(400, "bad snapshot")
+    query(f"INSERT INTO {S}.app_flag_acks VALUES (:e, :w, :r, cast(:u AS DATE), :n, :s, cast(:c AS BOOLEAN), :who, current_timestamp())",
+          {"e": eng, "w": _well(b.get("well_id")), "r": rule, "u": until, "n": note, "s": json.dumps(snap), "c": str(cleared).lower(), "who": _who(request)})
+    return {"ok": True}
+
+
+@app.post("/api/estimates")
+async def fix_estimate(request: Request):
+    """Record what it would cost to fix a flagged problem on a well (CAD). Empty cost clears it back to the rule default."""
+    b = await request.json()
+    eng, rule = b.get("engineer_id") or "", b.get("rule_id") or ""
+    if not ENG_RE.fullmatch(eng) or not RULE_ID_RE.fullmatch(rule): raise HTTPException(400, "bad engineer or rule id")
+    cost = _num(b.get("cost_cad"))
+    if cost is not None and cost < 0: raise HTTPException(400, "cost must be 0 or more")
+    query(f"INSERT INTO {S}.app_fix_estimates VALUES (:e, :w, :r, cast(:c AS DOUBLE), :n, :who, current_timestamp())",
+          {"e": eng, "w": _well(b.get("well_id")), "r": rule, "c": cost, "n": _txt(b.get("note")), "who": _who(request)})
+    return {"ok": True}
 
 
 @app.post("/api/tests")
