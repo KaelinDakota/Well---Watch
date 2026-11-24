@@ -87,7 +87,68 @@
     root.querySelectorAll('[data-lin]').forEach(a => a.onclick = e => { e.stopPropagation(); lineage(JSON.parse(a.dataset.lin)); });
     root.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => ask(`Why is ${b.dataset.ask} flagged, and what does the data show I should check first?`));
   }
-  const itemLin = it => it.record_id ? {kind: 'test', bronze_id: it.record_id} : it.event_id ? {kind: 'safety_event', bronze_id: it.event_id} : null;
+  const itemLin = it => it.record_id ? {kind: 'test', bronze_id: it.record_id, focus_well: it.well_id} : it.event_id ? {kind: 'safety_event', bronze_id: it.event_id, focus_well: it.well_id} : null;
+  let DRAWER_WELL = null;
+
+  // ---------------- "Look here first": what to highlight when tracing a flagged well ----------------
+  // A rule condition is on a snapshot/test/event field; the same quantity appears under other column names in the daily
+  // gold, silver and bronze rows. 'same' = apply the rule's own threshold to that column; a function = custom test; null = shade the column only.
+  const isZero = v => v !== null && v !== '' && Number(v) === 0;
+  const RELATED = {
+    h2s_ambient_max_7d_ppm: [['h2s_ambient_ppm_max', 'same']],
+    casing_pct_of_maasp: [['casing_pct_of_maasp', 'same'], ['casing_psi', null], ['csg_psi', null], ['casing_psi_max_7d', null], ['prod_casing_maasp_psi', null]],
+    casing_psi_max_7d: [['casing_psi', 'same'], ['csg_psi', 'same']], casing_psi_7d: [['casing_psi', 'same'], ['csg_psi', 'same']],
+    casing_psi_change: [['casing_psi', null], ['csg_psi', null], ['casing_psi_7d', null]],
+    sc_psi_max_7d: [['sc_psi', 'same']], sc_psi_change: [['sc_psi', null], ['sc_psi_max_7d', null], ['sc_pct_of_limit', null]],
+    sc_pct_of_limit: [['sc_pct_of_limit', 'same'], ['sc_psi', null], ['surface_casing_limit_psi', null]],
+    scvf_status: [['result_status', v => /serious|fail/i.test(String(v)) && !/non/i.test(String(v))], ['result', v => /serious|fail/i.test(String(v)) && !/non/i.test(String(v))], ['scvf_rate_m3d', null], ['result_value', null]],
+    flowline_pct_of_maop: [['flowline_pct_of_maop', 'same'], ['flowline_psi_max', null], ['flowline_psi_max_7d', null], ['flowline_maop_psi', null]],
+    flowline_psi_max_7d: [['flowline_psi_max', 'same']],
+    vent_pct_of_limit: [['vent_gas_m3', null], ['vent_mtd_m3', null], ['vent_limit_m3_month', null]],
+    perf_ratio_7d: [['oil_bbl', null], ['target_oil_bopd', null], ['oil_7d_bopd', null], ['target_7d_bopd', null], ['lost_oil_bopd', null]],
+    water_cut_change_pts: [['water_cut', null], ['water_bbl', null], ['water_cut_7d_pct', null]], water_cut_7d_pct: [['water_cut', null], ['water_bbl', null]],
+    gor_change_pct: [['gor_scf_bbl', null], ['gas_mcf', null], ['gas_vol', null], ['gor_7d', null]],
+    consecutive_down_days: [['hours_on', isZero], ['hrs_on', isZero], ['uptime', isZero], ['open_event_category', null]],
+    open_event_planned: [['planned', null], ['is_open', v => v === true || v === 'true']],
+    downtime_events_14d: [['category', null], ['planned', null], ['hours_lost', null]],
+    days_since_last_data: [['reported', v => v === false || v === 'false'], ['last_reported_date', null]],
+    margin_per_boe: [['operating_margin_cad', v => Number(v) < 0], ['operating_margin_oct_cad', v => Number(v) < 0], ['loe_cad', null], ['loe_per_boe', null], ['netback_per_boe', null]],
+    // test and event fields
+    last_result: [['result_status', 'same'], ['result_original', v => /fail|serious/i.test(String(v)) && !/non/i.test(String(v))], ['result', v => /fail|serious/i.test(String(v)) && !/non/i.test(String(v))]],
+    overdue: [['test_date', null], ['interval_months', null], ['next_due_date', null], ['days_until_due', v => Number(v) < 0]],
+    days_until_due: [['days_until_due', 'same'], ['test_date', null], ['interval_months', null], ['next_due_date', null]],
+    result_value: [['result_value', 'same']], test_type: [['test_type', null]],
+    category: [['category', 'same'], ['event_type', null], ['event_type_original', null]],
+    status: [['status', 'same']], reportable: [['reportable', 'same']], reported_to_regulator: [['reported_to_regulator', 'same']],
+    days_ago: [['event_date', null], ['event_ts', null], ['days_ago', 'same']], planned: [['planned', 'same']],
+  };
+  function buildFocus(wellId, itemId) {
+    const r = RANK.find(x => x.well_id === wellId); if (!r) return null;
+    const focus = {cols: {}, notes: [], itemIds: new Set(), well: wellId};
+    const add = (col, t) => { const k = col.toLowerCase(), cur = focus.cols[k];
+      focus.cols[k] = {tests: (cur ? cur.tests : []).concat(t ? [t] : [])}; };
+    for (const f of r.flags) {
+      const rule = RULES.find(x => x.id === f.rule_id); if (!rule) continue;
+      const ds = rule.dataset || 'well';
+      if (itemId && f.items && !f.items.some(it => (it.record_id || it.event_id) === itemId)) continue;
+      if (f.items) f.items.forEach(it => focus.itemIds.add(it.record_id || it.event_id));
+      focus.notes.push(f);
+      rule.conditions.forEach((cn, i) => {
+        if (ds === 'well' && f.evidence[i] && !f.evidence[i].matched) return;   // only the conditions that actually fired
+        const same = v => F.matchValue(cn, v, ds, D.today);
+        add(cn.field, same);
+        for (const [col, t] of RELATED[cn.field] || []) add(col, t === 'same' ? same : t);
+      });
+    }
+    return focus.notes.length ? focus : null;
+  }
+  const hitCell = (fc, v) => !!fc && v !== null && v !== undefined && v !== '' && fc.tests.some(t => { try { return t(v); } catch (e) { return false; } });
+  function focusBanner(fx) {
+    if (!fx) return '';
+    return `<div class="lookfirst"><b>Look at these first</b> · why ${esc(fx.well)} is flagged
+      ${fx.notes.map(f => `<div style="margin-top:4px"><span class="sev ${f.severity}" style="display:inline-block;margin-right:6px">${f.severity}</span>${f.safety ? '<span class="shield">SAFETY</span>' : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}${f.handled ? ' <span class="muted">(being handled)</span>' : ''}</div>`).join('')}
+      <div class="small" style="margin-top:6px"><span class="fhit" style="padding:0 5px">red</span> = this value crossed the rule's threshold · <span class="fcol" style="padding:0 5px">shaded</span> = the columns behind the flag. Highlighted fields are listed first.</div></div>`;
+  }
 
   // ---------------- My day ----------------
   function renderDay() {
@@ -327,10 +388,11 @@
 
   // ---------------- Well detail ----------------
   async function openWell(id) {
+    DRAWER_WELL = id;
     const w = D.snapshot.find(x => x.well_id === id); const r = RANK.find(x => x.well_id === id);
     $('#dhead').innerHTML = `<div><h2>${id} · ${esc(w.well_name)}</h2><div class="muted small">${esc(w.engineer_name)} · ${esc(w.reservoir)} · ${esc(w.lift_type)} · ${esc(w.area)} · pad ${esc(w.pad)} · ${esc(w.sour_class)}</div></div>
       <button class="btn sec small" id="dask" style="margin-left:auto">Ask about this well</button><button class="btn sec close" id="dx">Close</button>`;
-    $('#dx').onclick = () => $('#drawer').hidden = true; $('#dask').onclick = () => ask(`Give me a summary of ${id}: how is it performing, is anything wrong, and are there any safety issues?`);
+    $('#dx').onclick = () => { $('#drawer').hidden = true; DRAWER_WELL = null; }; $('#dask').onclick = () => ask(`Give me a summary of ${id}: how is it performing, is anything wrong, and are there any safety issues?`);
     $('#dbody').innerHTML = `<div class="empty dots">Loading ${id}</div>`; $('#drawer').hidden = false;
     let d; try { d = await api('api/well/' + id); } catch (e) { $('#dbody').innerHTML = `<div class="empty">Could not load: ${esc(e.message)}</div>`; return; }
     const kp = [['Oil, last 7 d', fmt(w.oil_7d_bopd, 1) + ' bbl/d'], ['vs type curve', fmt(w.perf_ratio_7d, 2) + '×'], ['Water cut', fmt(w.water_cut_7d_pct, 1) + '% (' + (w.water_cut_change_pts > 0 ? '+' : '') + fmt(w.water_cut_change_pts, 1) + ' pts)'],
@@ -441,27 +503,42 @@
   // ---------------- Lineage ----------------
   async function lineage(p) {
     showModal(`<div class="mhead"><h2>Where this number comes from</h2><button class="btn sec close" id="mx">Close</button></div><div class="mbody"><div class="empty dots">Tracing</div></div>`);
-    let d; try { d = await api('api/lineage?' + new URLSearchParams(p)); } catch (e) { $('#mbox .mbody').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+    const q = Object.assign({}, p); delete q.focus_well;
+    let d; try { d = await api('api/lineage?' + new URLSearchParams(q)); } catch (e) { $('#mbox .mbody').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+    const fx = buildFocus(p.well_id || p.focus_well || DRAWER_WELL, ['test', 'safety_event'].includes(p.kind) ? p.bronze_id : null);
     const sub = {daily: `${p.well_id} on ${p.date}`, safety_daily: `${p.well_id} safety readings on ${p.date}`, snapshot: `${p.well_id} production snapshot`, safety_snapshot: `${p.well_id} safety snapshot`,
       economics: `${p.well_id} ${String(p.month).slice(0, 7)}`, test: `test record ${p.bronze_id}`, safety_event: `safety event ${p.bronze_id}`}[p.kind] || p.kind.replace('_', ' ');
-    $('#mbox .mbody').innerHTML = `<div class="note" style="margin:4px 0 12px">${esc(sub)} · gold (what the app and the assistant read) → silver (cleaned) → bronze (as received) → raw file</div>` +
+    $('#mbox .mbody').innerHTML = focusBanner(fx) + `<div class="note" style="margin:4px 0 12px">${esc(sub)} · gold (what the app and the assistant read) → silver (cleaned) → bronze (as received) → raw file</div>` +
       d.steps.map(s => `<div class="step"><div><span class="layer ${s.layer}">${s.layer}</span> ${tableUrl(s.table) ? `<a class="small" href="${esc(tableUrl(s.table))}" target="_blank" rel="noopener"><code>${esc(s.table)}</code> ↗</a>` : s.layer === 'raw' ? `<a class="small" href="${esc(D.workspace_url + '/explore/data/volumes/workspace/well_ops/landing')}" target="_blank" rel="noopener"><code>/Volumes/workspace/well_ops/landing</code> ↗</a>` : `<code class="small">${esc(s.table)}</code>`}</div>
         ${s.note ? `<div class="note" style="margin:3px 0">${esc(s.note)}</div>` : ''}
         ${(s.rules || []).length ? `<div class="rulebox"><b>Cleaning rules applied:</b>${[...new Map(s.rules.map(r => [r.rule_id, r])).values()].map(r => `<div><code>${esc(r.rule_id)}</code> ${esc(r.description)}</div>`).join('')}</div>` : ''}
         ${s.files ? `<div class="rulebox">${s.files.map(f => `📄 ${esc(f)}`).join('<br>')}</div>` : ''}
-        ${s.rows ? rowsTable(s.rows, {traceFn: s.trace_daily ? r => ({kind: 'daily', well_id: p.well_id, date: String(r.prod_date).slice(0, 10)}) : s.trace_safety ? r => ({kind: 'safety_daily', well_id: p.well_id, date: String(r.reading_date).slice(0, 10)}) : null}) : ''}</div>`).join('');
+        ${s.rows ? rowsTable(s.rows, {focus: fx, traceFn: s.trace_daily ? r => ({kind: 'daily', well_id: p.well_id, date: String(r.prod_date).slice(0, 10)}) : s.trace_safety ? r => ({kind: 'safety_daily', well_id: p.well_id, date: String(r.reading_date).slice(0, 10)}) : null}) : ''}</div>`).join('');
     document.querySelectorAll('#mbox [data-lin]').forEach(a => a.onclick = () => lineage(JSON.parse(a.dataset.lin)));
   }
   function rowsTable(rows, o = {}) {
     if (!rows.length) return '<div class="muted small">No rows.</div>';
-    const cols = Object.keys(rows[0]).filter(c => !['_rescued_data'].includes(c));
+    const fx = o.focus, fc = c => fx && fx.cols[c.toLowerCase()];
+    let cols = Object.keys(rows[0]).filter(c => !['_rescued_data'].includes(c));
     const cell = v => v === null || v === undefined ? '<span class="muted">null</span>' : typeof v === 'object' ? esc(JSON.stringify(v)) : esc(v);
+    const cls = (c, v) => hitCell(fc(c), v) ? 'fhit' : fc(c) ? 'fcol' : '';
+    const isItem = r => fx && [r.record_id, r.test_id, r.event_id, r.entry_id].some(x => x && fx.itemIds.has(x));
     if (rows.length === 1 && cols.length > 8 && !o.traceFn) {
-      return `<div class="tw" style="max-height:300px"><table><tbody>${cols.map(c => `<tr><th style="position:static">${esc(c)}</th><td>${cell(rows[0][c])}</td></tr>`).join('')}</tbody></table></div>`;
+      const r0 = rows[0];
+      if (fx) cols = cols.slice().sort((a, b) => (hitCell(fc(b), r0[b]) - hitCell(fc(a), r0[a])) || (!!fc(b) - !!fc(a)));
+      return `<div class="tw" style="max-height:300px"><table><tbody>${cols.map(c => `<tr><th style="position:static" class="${fc(c) ? 'fcol' : ''}">${esc(c)}</th><td class="${cls(c, r0[c])}">${cell(r0[c])}${hitCell(fc(c), r0[c]) ? ' ⚑' : ''}</td></tr>`).join('')}</tbody></table></div>`;
     }
-    return `<div class="tw"><table><thead><tr>${o.traceFn ? '<th></th>' : ''}${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>
-      ${rows.slice(0, 120).map(r => { const t = o.traceFn ? o.traceFn(r) : null;
-        return `<tr class="${r._used_in_silver ? 'used' : ''}">${o.traceFn ? `<td>${t ? `<a class="lk" ${lin(t)}>trace</a>` : ''}</td>` : ''}${cols.map(c => `<td>${cell(r[c])}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
+    if (fx) {  // flagged columns move next to the identifying columns so they're visible without scrolling
+      const key = c => /^(well_id|uwi_alias|prod_date|reading_date|event_date|event_ts|test_date|month|test_id|event_id|record_id|entry_id|test_type|category)$/i.test(c);
+      cols = cols.filter(key).concat(cols.filter(c => !key(c) && fc(c)), cols.filter(c => !key(c) && !fc(c)));
+    }
+    const shown = rows.slice(0, 120);
+    const rowHit = r => isItem(r) || cols.some(c => hitCell(fc(c), r[c]));
+    const nHit = fx ? shown.filter(rowHit).length : 0;
+    return `${nHit ? `<div class="small" style="color:#8a1c0f;margin:4px 0">⚑ ${nHit} of ${shown.length} row${shown.length === 1 ? '' : 's'} crossed a flag threshold or belong to the flag (marked below).</div>` : ''}
+      <div class="tw"><table><thead><tr>${o.traceFn ? '<th></th>' : ''}${cols.map(c => `<th class="${fc(c) ? 'fcol' : ''}">${esc(c)}</th>`).join('')}</tr></thead><tbody>
+      ${shown.map(r => { const t = o.traceFn ? o.traceFn(r) : null, h = fx && rowHit(r);
+        return `<tr class="${r._used_in_silver ? 'used' : ''} ${h ? 'frow' : ''}">${o.traceFn ? `<td>${h ? '⚑ ' : ''}${t ? `<a class="lk" ${lin(t)}>trace</a>` : ''}</td>` : ''}${cols.map(c => `<td class="${cls(c, r[c])}">${cell(r[c])}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
       ${rows.length > 120 ? `<div class="muted small">first 120 of ${rows.length} rows</div>` : ''}`;
   }
   function showModal(html) { $('#mbox').innerHTML = html; $('#modal').hidden = false; $('#mx').onclick = () => $('#modal').hidden = true; }
@@ -681,7 +758,7 @@
         <h3>Query the assistant ran</h3><pre class="sql">${esc(e.sql)}</pre>
         ${e.summary ? `<h3>Summary computed by the tool (not by the model)</h3>${rowsTable([e.summary])}` : ''}
         <h3>Rows returned <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· "trace" follows a row back to silver, bronze and the raw file</span></h3>
-        ${rowsTable(e.rows.map(r => { const o = Object.assign({}, r); if (o.flags) o.flags = o.flags.map(f => f.rule).join('; '); return o; }), {traceFn})}</div>`);
+        ${rowsTable(e.rows.map(r => { const o = Object.assign({}, r); if (o.flags) o.flags = o.flags.map(f => f.rule).join('; '); return o; }), {traceFn, focus: (() => { const ws = [...new Set(e.rows.map(r => r.well_id).filter(Boolean))]; return ws.length === 1 ? buildFocus(ws[0]) : null; })()})}</div>`);
     document.querySelectorAll('#mbox [data-lin]').forEach(a => a.onclick = () => lineage(JSON.parse(a.dataset.lin)));
   }
 

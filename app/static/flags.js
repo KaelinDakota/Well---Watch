@@ -385,6 +385,8 @@
     return errs;
   }
 
-  const api = {GROUPS, FIX_COSTS, TIERS, ackSnapshot, DATASETS, FIELDS: WELL_FIELDS, FIELD: maps.well, fieldOf, setCustomFields, OPS, NEEDS_VALUE, NEEDS_FIELD, DEFAULT_RULES, evaluate, rank, validateRule, fill, fmtVal, isSafety};
+  // does a single value satisfy a condition? (used to highlight the cells that crossed a rule's threshold)
+  const matchValue = (cn, v, ds, asOf) => test(cn, {[cn.field]: v}, toDate(asOf), ds || 'well');
+  const api = {matchValue, GROUPS, FIX_COSTS, TIERS, ackSnapshot, DATASETS, FIELDS: WELL_FIELDS, FIELD: maps.well, fieldOf, setCustomFields, OPS, NEEDS_VALUE, NEEDS_FIELD, DEFAULT_RULES, evaluate, rank, validateRule, fill, fmtVal, isSafety};
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.FlagEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

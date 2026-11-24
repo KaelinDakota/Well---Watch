@@ -318,6 +318,10 @@ def lineage(kind: str, well_id: str = "", date: str = "", bronze_id: str = "", m
             steps.append({"layer": "raw", "table": "landing volume", "files": sorted({r["_source_file"] for r in b + rb})})
     elif kind == "test":
         if not re.fullmatch(r"(T\d{5}|APP-T-[0-9a-f]{10})", bronze_id): raise HTTPException(400, "bad test id")
+        g = query(f"SELECT * FROM {S}.gold_v_compliance_items WHERE record_id = :b", {"b": bronze_id})
+        steps.append({"layer": "gold", "table": f"{S}.gold_v_compliance_items",
+                      "note": "Latest test of this type for the well, with the next due date (last test + required interval) and days overdue as of 2026-11-23." if g else
+                              "A newer test of this type exists, so this record is history and isn't the one the rules use.", "rows": g})
         if bronze_id.startswith("APP-"):
             steps.append({"layer": "silver", "table": f"{S}.app_compliance_entries", "note": "Logged by an engineer in Well Watch.",
                           "rows": query(f"SELECT * FROM {S}.app_compliance_entries WHERE entry_id = :b", {"b": bronze_id})})
