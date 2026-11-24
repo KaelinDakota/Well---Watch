@@ -143,7 +143,7 @@
   const DEFAULT_RULES_RAW = [
     // ---- safety (category "Safety" ranks first when "safety first" is on) ----
     R('SAFE_H2S_AMBIENT', 'H2S detected at surface', 'Critical', 70, 'Safety', [c('h2s_ambient_max_7d_ppm', 'gte', 10)],
-      'Fixed monitor read up to {h2s_ambient_max_7d_ppm} ppm H2S at the wellsite in the last 7 days ({sour_class}; {residences_in_epz} residences in EPZ).', 'Find the source and confirm monitors and access controls.' + SAFE_ACT),
+      'Fixed monitor read up to {h2s_ambient_max_7d_ppm} ppm H2S at the wellsite in the last 7 days ({sour_class}; residences in EPZ: {residences_in_epz}).', 'Find the source and confirm monitors and access controls.' + SAFE_ACT),
     R('SAFE_SCVF_SERIOUS', 'Serious surface casing vent flow', 'Critical', 70, 'Safety', [c('scvf_status', 'eq', 'Serious')],
       'Latest vent flow test: Serious, {scvf_rate_m3d} m3/d.', 'Plan the repair within the regulator\'s timeline.' + SAFE_ACT),
     R('SAFE_SC_PRESSURE', 'Surface casing pressure building', 'Critical', 60, 'Safety', [c('sc_psi_change', 'gt', 25), c('sc_pct_of_limit', 'gte', 30)],

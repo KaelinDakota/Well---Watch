@@ -405,23 +405,44 @@
     const kp = [['Oil, last 7 d', fmt(w.oil_7d_bopd, 1) + ' bbl/d'], ['vs type curve', fmt(w.perf_ratio_7d, 2) + '×'], ['Water cut', fmt(w.water_cut_7d_pct, 1) + '% (' + (w.water_cut_change_pts > 0 ? '+' : '') + fmt(w.water_cut_change_pts, 1) + ' pts)'],
       ['GOR', fmt(w.gor_7d) + ' (' + (w.gor_change_pct > 0 ? '+' : '') + fmt(w.gor_change_pct, 1) + '%)'], ['Casing', fmt(w.casing_psi_7d) + ' psi (' + (w.casing_psi_change > 0 ? '+' : '') + fmt(w.casing_psi_change) + ')'],
       ['Uptime 14 d', fmt(w.uptime_14d_pct, 1) + '%'], ['Margin (Oct)', '$' + fmt(w.margin_per_boe, 2) + '/boe'], ['At risk', '$' + fmt(w.value_at_risk_cad_day) + '/day']];
+    const fx = buildFocus(id);
+    const alertF = new Set(fx ? Object.keys(fx.cols) : []);
+    if (r) for (const f of r.flags.filter(f => !f.handled)) {
+      if (f.dataset === 'test') alertF.add('tests_overdue');
+      const rule = RULES.find(x => x.id === f.rule_id);
+      if (f.dataset === 'event' && rule && rule.conditions.some(c => /h2s/i.test(String(c.value)))) alertF.add('h2s_ambient_max_7d_ppm');
+    }
+    const BOXF = {'Casing vs MAASP': ['casing_pct_of_maasp', 'casing_psi_max_7d', 'casing_psi_change'], 'Surface casing': ['sc_psi_max_7d', 'sc_psi_change', 'sc_pct_of_limit'],
+      'Flowline vs MAOP': ['flowline_pct_of_maop', 'flowline_psi_max_7d'], 'Vent flow test': ['scvf_status'], 'H2S': ['h2s_ambient_max_7d_ppm', 'h2s_ppm_gas'], 'EPZ': ['residences_in_epz'],
+      'Venting this month': ['vent_pct_of_limit', 'vent_mtd_m3'], 'Tests': ['tests_overdue', 'critical_tests_overdue', 'failed_tests'],
+      'Oil, last 7 d': ['perf_ratio_7d', 'oil_7d_bopd'], 'vs type curve': ['perf_ratio_7d'], 'Water cut': ['water_cut_change_pts', 'water_cut_7d_pct'], 'GOR': ['gor_change_pct', 'gor_7d'],
+      'Casing': ['casing_psi_change', 'casing_psi_7d'], 'Uptime 14 d': ['consecutive_down_days', 'downtime_events_14d', 'uptime_14d_pct'], 'Margin (Oct)': ['margin_per_boe'], 'At risk': ['value_at_risk_cad_day', 'perf_ratio_7d', 'consecutive_down_days']};
+    const boxAlert = l => (BOXF[l] || []).some(f => alertF.has(f));
+    const boxHtml = (l, v, size) => `<div class="kpi ${boxAlert(l) ? 'kpi-alert' : ''}"><div class="n" style="font-size:${size}px">${esc(v)}</div><div class="l">${l}${boxAlert(l) ? ' <b class="flagtxt">⚑ why it\'s flagged</b>' : ''}</div></div>`;
     const sk = [['Casing vs MAASP', `${fmt(w.casing_psi_max_7d)} / ${fmt(w.prod_casing_maasp_psi)} psi (${fmt(w.casing_pct_of_maasp, 0)}%)`], ['Surface casing', `${fmt(w.sc_psi_max_7d, 0)} / ${fmt(w.surface_casing_limit_psi)} psi (${fmt(w.sc_pct_of_limit, 0)}%)`],
       ['Flowline vs MAOP', `${fmt(w.flowline_psi_max_7d, 0)} / ${fmt(w.flowline_maop_psi)} psi (${fmt(w.flowline_pct_of_maop, 0)}%)`], ['Vent flow test', `${w.scvf_status || '–'}${w.scvf_rate_m3d ? ' · ' + fmt(w.scvf_rate_m3d) + ' m3/d' : ''}`],
-      ['H2S', `${fmt(w.h2s_ppm_gas)} ppm in gas · ${fmt(w.h2s_ambient_max_7d_ppm)} ppm at surface`], ['EPZ', w.epz_m ? `${fmt(w.epz_m)} m · ${fmt(w.residences_in_epz)} residences` : 'none (sweet)'],
+      ['H2S', `${fmt(w.h2s_ppm_gas)} ppm in gas · ${fmt(w.h2s_ambient_max_7d_ppm)} ppm at surface`], ['EPZ', w.epz_m ? `${fmt(w.epz_m)} m · ${fmt(w.residences_in_epz)} residence${Number(w.residences_in_epz) === 1 ? '' : 's'}` : 'none (sweet)'],
       ['Venting this month', `${fmt(w.vent_mtd_m3)} / ${fmt(w.vent_limit_m3_month)} m3 (${fmt(w.vent_pct_of_limit, 0)}%)`], ['Tests', `${fmt(w.tests_overdue)} overdue · ${fmt(w.tests_due_30d)} due ≤30 d · ${fmt(w.failed_tests)} failed`]];
     const sd = d.safety_daily, prod = d.daily.map(x => ({date: x.prod_date, y: x.reported ? x.oil_bbl : null, y2: x.target_oil_bopd}));
     const myTests = ITEMS.test.filter(t => t.well_id === id).sort((a, b) => (testState(a) - testState(b)) || (a.days_until_due - b.days_until_due));
     const myEvents = ITEMS.event.filter(e => e.well_id === id).sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
+    // rule threshold drawn on each safety chart (red when it's why the well is flagged)
+    const thr = (field, toUnits) => { const rl = RULES.find(x => x.enabled && (x.dataset || 'well') === 'well' && x.conditions.some(c => c.field === field && ['gt', 'gte'].includes(c.op)));
+      if (!rl) return null; const c = rl.conditions.find(c => c.field === field && ['gt', 'gte'].includes(c.op)); const v = toUnits ? toUnits(Number(c.value)) : Number(c.value);
+      return isFinite(v) ? {v, label: `${rl.name}: flag at ${c.op === 'gte' ? '≥' : '>'} ${fmt(c.value, 0)}${toUnits ? '%' : ''}`, on: alertF.has(field)} : null; };
+    const charts = (list) => list.map(([fields, html]) => [fields.some(f => alertF.has(f)), html]).sort((a, b) => b[0] - a[0]).map(x => x[1]).join('');
     $('#dbody').innerHTML = `
+      ${whyBox(r, fx, d, id, sk.filter(([l]) => !boxAlert(l)).map(([l]) => l))}
       <h3>Flags today ${r ? (r.tier === 'handled' ? '· all being handled' : `· ${r.tier} · rank #${ACTIVE().indexOf(r) + 1} · ${r.score} pts${r.tier === 'production' ? ` · $${fmt(r.value)}/day` : ''}`) : ''}</h3>
       ${r ? `<div style="display:grid;grid-template-columns:44px 1fr auto">${r.flags.map(flagHtml).join('')}</div>` : '<div class="muted">No flags from your rules.</div>'}
       <h3>Safety <a class="lk small" ${lin({kind: 'safety_snapshot', well_id: id})} style="text-transform:none;letter-spacing:0;margin-left:6px">trace →</a></h3>
-      <div class="kpis" style="grid-template-columns:repeat(4,1fr)">${sk.map(([l, v]) => `<div class="kpi"><div class="n" style="font-size:14px">${esc(v)}</div><div class="l">${l}</div></div>`).join('')}</div>
+      <div class="kpis" style="grid-template-columns:repeat(4,1fr)">${sk.map(([l, v]) => boxHtml(l, v, 14)).join('')}</div>
       <div class="charts">
-        ${chartBox('Production casing vs MAASP (psi)', 'csgm', sd.map(x => ({date: x.reading_date, y: x.casing_psi, y2: x.prod_casing_maasp_psi})), {l1: 'Casing', l2: 'MAASP', kind: 'safety_daily'})}
-        ${chartBox('Surface casing vs limit (psi)', 'scp', sd.map(x => ({date: x.reading_date, y: x.sc_psi, y2: x.surface_casing_limit_psi})), {l1: 'Surface casing', l2: 'Limit', kind: 'safety_daily'})}
-        ${chartBox('Flowline max vs MAOP (psi)', 'flp', sd.map(x => ({date: x.reading_date, y: x.flowline_psi_max, y2: x.flowline_maop_psi})), {l1: 'Flowline', l2: 'MAOP', kind: 'safety_daily'})}
-        ${chartBox('H2S at surface, daily max (ppm)', 'h2s', sd.map(x => ({date: x.reading_date, y: x.h2s_ambient_ppm_max})), {kind: 'safety_daily'})}
+        ${charts([
+          [['casing_pct_of_maasp', 'casing_psi_max_7d', 'casing_psi_change'], chartBox('Production casing vs MAASP (psi)', 'csgm', sd.map(x => ({date: x.reading_date, y: x.casing_psi, y2: x.prod_casing_maasp_psi})), {l1: 'Casing', l2: 'MAASP', kind: 'safety_daily', alert: ['casing_pct_of_maasp', 'casing_psi_max_7d', 'casing_psi_change'].some(f => alertF.has(f)), thresh: thr('casing_pct_of_maasp', pct => w.prod_casing_maasp_psi * pct / 100)})],
+          [['sc_psi_max_7d', 'sc_psi_change', 'sc_pct_of_limit', 'scvf_status'], chartBox('Surface casing vs limit (psi)', 'scp', sd.map(x => ({date: x.reading_date, y: x.sc_psi, y2: x.surface_casing_limit_psi})), {l1: 'Surface casing', l2: 'Limit', kind: 'safety_daily', alert: ['sc_psi_max_7d', 'sc_psi_change', 'sc_pct_of_limit'].some(f => alertF.has(f)), thresh: thr('sc_pct_of_limit', pct => w.surface_casing_limit_psi * pct / 100)})],
+          [['flowline_pct_of_maop', 'flowline_psi_max_7d'], chartBox('Flowline max vs MAOP (psi)', 'flp', sd.map(x => ({date: x.reading_date, y: x.flowline_psi_max, y2: x.flowline_maop_psi})), {l1: 'Flowline', l2: 'MAOP', kind: 'safety_daily', alert: alertF.has('flowline_pct_of_maop'), thresh: thr('flowline_pct_of_maop', pct => w.flowline_maop_psi * pct / 100)})],
+          [['h2s_ambient_max_7d_ppm'], chartBox('H2S at surface, daily max (ppm)', 'h2s', sd.map(x => ({date: x.reading_date, y: x.h2s_ambient_ppm_max})), {kind: 'safety_daily', alert: alertF.has('h2s_ambient_max_7d_ppm'), thresh: thr('h2s_ambient_max_7d_ppm')})]])}
       </div>
       <h3>Tests and inspections (${myTests.length}) <a class="lk" id="dlogt" style="text-transform:none;letter-spacing:0;margin-left:6px">+ log one</a></h3>
       ${myTests.length ? TEST_LEGEND + `<div class="tw" style="max-height:280px"><table><thead><tr><th>Status</th><th>Test</th><th>Last done</th><th>Result</th><th>Next due</th><th>Recorded in</th><th></th></tr></thead><tbody>
@@ -437,13 +458,14 @@
       ${D.custom_fields.length ? `<h3>Custom fields <a class="lk" id="dcf" style="text-transform:none;letter-spacing:0;margin-left:6px">edit</a></h3><div class="kpis" style="grid-template-columns:repeat(4,1fr)">
         ${D.custom_fields.map(c => `<div class="kpi"><div class="n" style="font-size:14px">${esc(F.fmtVal('x_' + c.field_key, w['x_' + c.field_key]))}</div><div class="l">${esc(c.label)}</div></div>`).join('')}</div>` : ''}
       <h3>Production snapshot as of ${D.as_of} <a class="lk small" ${lin({kind: 'snapshot', well_id: id})} style="text-transform:none;letter-spacing:0;margin-left:6px">trace →</a></h3>
-      <div class="kpis" style="grid-template-columns:repeat(4,1fr)">${kp.map(([l, v]) => `<div class="kpi"><div class="n" style="font-size:16px">${esc(v)}</div><div class="l">${l}</div></div>`).join('')}</div>
+      <div class="kpis" style="grid-template-columns:repeat(4,1fr)">${kp.map(([l, v]) => boxHtml(l, v, 16)).join('')}</div>
       <h3>Daily data since Aug 1 <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· click any point to trace it back to the raw file</span></h3>
       <div class="charts">
-        ${chartBox('Oil (bbl/d) vs type curve', 'oil', prod, {l1: 'Oil', l2: 'Type curve'})}
-        ${chartBox('Water cut (%)', 'wc', d.daily.map(x => ({date: x.prod_date, y: x.water_cut === null ? null : 100 * x.water_cut})))}
-        ${chartBox('Gas-oil ratio (scf/bbl)', 'gor', d.daily.map(x => ({date: x.prod_date, y: x.gor_scf_bbl})))}
-        ${chartBox('Production casing pressure (psi)', 'csg', d.daily.map(x => ({date: x.prod_date, y: x.casing_psi})))}
+        ${charts([
+          [['perf_ratio_7d', 'consecutive_down_days'], chartBox('Oil (bbl/d) vs type curve', 'oil', prod, {l1: 'Oil', l2: 'Type curve', alert: ['perf_ratio_7d', 'consecutive_down_days'].some(f => alertF.has(f))})],
+          [['water_cut_change_pts'], chartBox('Water cut (%)', 'wc', d.daily.map(x => ({date: x.prod_date, y: x.water_cut === null ? null : 100 * x.water_cut})), {alert: alertF.has('water_cut_change_pts')})],
+          [['gor_change_pct'], chartBox('Gas-oil ratio (scf/bbl)', 'gor', d.daily.map(x => ({date: x.prod_date, y: x.gor_scf_bbl})), {alert: alertF.has('gor_change_pct')})],
+          [['casing_psi_change'], chartBox('Production casing pressure (psi)', 'csg', d.daily.map(x => ({date: x.prod_date, y: x.casing_psi})), {alert: alertF.has('casing_psi_change')})]])}
       </div>
       <h3>Downtime events (${d.downtime.length})</h3>
       ${d.downtime.length ? `<div class="tw" style="max-height:260px"><table><thead><tr><th>Date</th><th>Category (AI)</th><th>Operator's text</th><th class="n">Hours</th><th>Planned</th><th></th></tr></thead><tbody>
@@ -463,6 +485,40 @@
     if ($('#dcf')) $('#dcf').onclick = () => editWellFields(id);
     bindCharts(id);
   }
+  // Plain statement of what makes this well flagged: measured value vs the rule's threshold, and on which days.
+  function whyBox(r, fx, d, id, okBoxes) {
+    if (!r) return `<div class="whybox ok"><b>Nothing is flagged on this well</b> under your current rules.</div>`;
+    const open = r.flags.filter(f => !f.handled);
+    if (!open.length) return `<div class="whybox ok"><b>Every flag on this well is marked as being handled.</b> See below.</div>`;
+    const recent = rows => rows.filter(x => String(x.reading_date || x.prod_date) >= '2026-11-09');
+    const sd = recent(d.safety_daily), dd = recent(d.daily);
+    const opTxt = {gt: '>', gte: '≥', lt: '<', lte: '≤', eq: '=', ne: '≠', is_true: 'is yes', is_false: 'is no', one_of: 'is one of', contains: 'contains'};
+    const items = open.map(f => {
+      const rule = RULES.find(x => x.id === f.rule_id); let detail = '';
+      if (!f.items && rule) {
+        detail = rule.conditions.map((cn, i) => {
+          if (f.evidence[i] && !f.evidence[i].matched) return '';
+          const fd = F.fieldOf('well', cn.field); const v = r.fact[cn.field];
+          // which recent days crossed it, from the daily data shown on this page
+          let days = [];
+          for (const [col, tst] of RELATED[cn.field] || []) {
+            const test = tst === 'same' ? (val => F.matchValue(cn, val, 'well', D.today)) : tst;
+            if (!test) continue;
+            for (const row of sd.concat(dd)) if (col in row && hitCell({tests: [test]}, row[col])) days.push(String(row.reading_date || row.prod_date).slice(5, 10));
+          }
+          days = [...new Set(days)].sort();
+          return `<li><b>${esc(fd ? fd.label : cn.field)}: ${esc(F.fmtVal(cn.field, v))}</b> <span class="muted">· ${['is_true', 'is_false'].includes(cn.op) ? `flags when ${cn.op === 'is_true' ? 'yes' : 'no'}` : `flags at ${esc(opTxt[cn.op] || cn.op)} ${esc(cn.value ?? '')}`}</span>${days.length ? ` <span class="muted">· crossed on ${days.length} of the last 14 days (${esc(days.join(', '))})</span>` : ''}</li>`;
+        }).join('');
+      } else if (f.items) {
+        detail = f.items.slice(0, 5).map(it => `<li><a class="lk" ${lin(itemLin(it))}>${esc(F.DATASETS[f.dataset].describe(it))}</a></li>`).join('') + (f.items.length > 5 ? `<li class="muted">+${f.items.length - 5} more</li>` : '');
+      }
+      return `<div style="margin-top:6px"><span class="sev ${f.severity}" style="display:inline-block;margin-right:6px">${f.severity}</span>${f.safety ? '<span class="shield">SAFETY</span>' : ''}<b>${esc(f.rule_name)}</b><ul style="margin:3px 0 0 18px;padding:0">${detail}</ul></div>`;
+    }).join('');
+    return `<div class="whybox"><div style="display:flex;align-items:center;gap:8px"><b style="font-size:15px">Why this well is flagged</b>
+        <a class="lk small" ${lin({kind: r.flags.some(f => f.safety && !f.handled) ? 'safety_snapshot' : 'snapshot', well_id: id})}>show the readings behind this →</a></div>${items}
+      ${okBoxes.length ? `<div class="note" style="margin-top:8px">Not part of the problem: ${esc(okBoxes.join(', '))} ${okBoxes.length > 1 ? 'are' : 'is'} within limits.</div>` : ''}
+      <div class="note">The ⚑ boxes and charts below are the ones behind these flags.</div></div>`;
+  }
   function editWellFields(id) {
     formModal(`Custom fields for ${id}`, `<div class="frm">${D.custom_fields.map(c => { const v = (D.attrs[id] || {})[c.field_key] ?? '';
       return `<div><label>${esc(c.label)}</label>${c.field_type === 'yesno' ? `<select data-k="${c.field_key}"><option value="">–</option><option value="true" ${v === 'true' ? 'selected' : ''}>Yes</option><option value="false" ${v === 'false' ? 'selected' : ''}>No</option></select>`
@@ -479,7 +535,7 @@
   function chartBox(title, key, pts, o = {}) {
     CH[key] = {pts, kind: o.kind || 'daily'};
     const W = 420, H = 150, L = 40, R = 8, T = 8, B = 20;
-    const ys = pts.flatMap(p => [p.y, p.y2]).filter(v => v !== null && v !== undefined);
+    const ys = pts.flatMap(p => [p.y, p.y2]).concat(o.thresh ? [o.thresh.v] : []).filter(v => v !== null && v !== undefined && isFinite(v));
     if (!ys.length) return `<div class="chart"><div class="ct">${title}</div><div class="muted small">No data.</div></div>`;
     let lo = Math.min(...ys), hi = Math.max(...ys); if (lo === hi) { lo -= 1; hi += 1; } const pad = (hi - lo) * 0.08; lo = Math.max(lo - pad, Math.min(...ys) >= 0 ? 0 : lo - pad); hi += pad;
     const x = i => L + (W - L - R) * i / Math.max(1, pts.length - 1), y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
@@ -487,10 +543,13 @@
     const ticks = [lo, (lo + hi) / 2, hi].map(v => `<text x="${L - 4}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="#5d6b78">${fmt(v, hi - lo < 5 ? 1 : 0)}</text><line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#eef1f3"/>`).join('');
     const months = pts.map((p, i) => [String(p.date), i]).filter(([d]) => d.slice(8, 10) === '01').map(([d, i]) => `<text x="${x(i)}" y="${H - 6}" font-size="9" fill="#5d6b78" text-anchor="middle">${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+d.slice(5, 7) - 1]}</text>`).join('');
     const limit = o.l2 && ['MAASP', 'Limit', 'MAOP'].includes(o.l2);
-    return `<div class="chart"><div class="ct">${title}</div>${o.l1 ? `<div class="lg"><span style="color:#2f6fb3">━</span> ${o.l1} &nbsp; <span style="color:${limit ? '#c2412d' : '#b38a12'}">┅</span> ${o.l2}</div>` : ''}
+    const t = o.thresh, tc = t && t.on ? '#c2412d' : '#9aa6b1';
+    const tLine = t ? `<line x1="${L}" x2="${W - R}" y1="${y(t.v)}" y2="${y(t.v)}" stroke="${tc}" stroke-width="1.2" stroke-dasharray="2 2"/><text x="${W - R - 2}" y="${y(t.v) - 3}" text-anchor="end" font-size="9" fill="${tc}">${esc(t.label)}</text>` : '';
+    const dots = t && t.on ? pts.map((p, i) => p.y !== null && p.y !== undefined && p.y >= t.v ? `<circle cx="${x(i).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="2.6" fill="#c2412d"/>` : '').join('') : '';
+    return `<div class="chart ${o.alert ? 'chart-alert' : ''}"><div class="ct">${title}${o.alert ? ' <b class="flagtxt">⚑ why it\'s flagged</b>' : ''}</div>${o.l1 ? `<div class="lg"><span style="color:#2f6fb3">━</span> ${o.l1} &nbsp; <span style="color:${limit ? '#c2412d' : '#b38a12'}">┅</span> ${o.l2}</div>` : ''}
       <svg viewBox="0 0 ${W} ${H}" data-chart="${key}" data-l="${L}" data-r="${R}" data-w="${W}">${ticks}${months}
         ${pts.some(p => p.y2 !== undefined) ? `<path d="${path('y2')}" fill="none" stroke="${limit ? '#c2412d' : '#b38a12'}" stroke-width="1.5" stroke-dasharray="4 3"/>` : ''}
-        <path d="${path('y')}" fill="none" stroke="#2f6fb3" stroke-width="1.6"/>
+        ${tLine}<path d="${path('y')}" fill="none" stroke="#2f6fb3" stroke-width="1.6"/>${dots}
         <line class="hair" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="#9aa6b1" visibility="hidden"/>
         <rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" style="cursor:pointer"/></svg></div>`;
   }
