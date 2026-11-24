@@ -71,6 +71,17 @@ Saved to: `app_flag_rules`, `app_flag_settings`, `app_flag_acks` and `app_fix_es
    Anything that fails is highlighted in the UI. The answer shows "✓ all statements verified" or "⚠ n of m verified".
 4. **Every evidence row can be traced back to its source.** Rows trace back through silver and bronze to the raw landing file. Lineage shows which cleaning rules applied and, for resent days, which bronze version won.
 
+### Every answer shows where its data came from
+
+The assistant must look something up for every question:
+- **What a term means:** the `gold_glossary` table (`pipeline/06_glossary.sql`).
+- **How ranking works:** the engineer's saved rules.
+- **Anything about wells:** the data tools.
+
+If it answers without a lookup, the app sends it back to look first. If it still has none, the answer is marked "no source" in red.
+
+Each answer ends with a **Sources** list that the app builds from the lookups it actually ran, not from the model's text. Each source links to its tables in Databricks Catalog Explorer, and "view rows and trace to raw file" opens the rows with lineage back to the landing file.
+
 ## Results (synthetic answer key)
 
 - **Safety.** 22 planted safety problems across 16 types, plus 5 look-alikes: a planned ESD function test during a turnaround, a known low non-serious vent flow, and an old spill that was closed out and reported. All 22 fire their expected rules and land in their engineer's top 10. None of the look-alikes gets a safety flag. Results are in `workspace.well_eval.safety_scoring`.
@@ -82,7 +93,7 @@ Saved to: `app_flag_rules`, `app_flag_settings`, `app_flag_acks` and `app_fix_es
 ## Run it
 
 1. Upload the files from `dataset/raw/` to `/Volumes/workspace/well_ops/landing/`.
-2. Run `pipeline/01–05` in order (`python run_sql.py pipeline/01_bronze.sql`, …).
+2. Run `pipeline/01–06` in order (`python run_sql.py pipeline/01_bronze.sql`, …).
 3. Run `python deploy.py`.
 
 The app needs a serverless SQL warehouse and access to the `databricks-gpt-oss-120b` endpoint. You can change the endpoint in `deploy.py`.

@@ -29,7 +29,7 @@ class Conversation:
 SYSTEM = """You are the production engineering assistant for a portfolio of oil wells (synthetic demo data).
 Today is 2026-11-23. Daily data runs from 2026-05-27 to 2026-11-22 (yesterday).
 Rules:
-1. Learn every fact from the tools. Never guess or use outside knowledge about these wells. If the tools don't show it, say "The data doesn't show that."
+1. Learn every fact from the tools, and call at least one tool for EVERY question, even simple ones: get_definitions for what a term means, get_my_rules for how flags and ranking work, data tools for anything about wells. Never guess or use outside knowledge about these wells. If the tools don't show it, say "The data doesn't show that."
 2. Every tool result has an evidence_id. End EVERY sentence or bullet that states a fact with the evidence id(s) it came from, written exactly like [E2] or [E2, E5] (plain square brackets). Only cite ids you received from tools in this conversation; call a tool before you cite it.
 3. Copy numbers exactly as the tools give them, with units (bbl/d, psi, %, $/day). Use the summary figures tools provide instead of doing your own arithmetic. Every bullet with a number needs a citation.
 4. The ranking comes from the engineer's own flag rules, in tiers: "safety" (Critical/Warning safety flags, by severity), then "production" (by $/day at risk, fastest payback or points, per the engineer's setting), then "watch" (Review-only flags); "handled" wells were marked as being handled and are out of the top 10. Related rules count once. Say so when you explain why a well ranks where it does.
@@ -56,6 +56,9 @@ def tool_specs():
          "parameters": s({**wid, "only": {"type": "string", "enum": ["all", "overdue", "due_30d", "failed"], "description": "filter (default all for one well, overdue for the portfolio)"}})},
         {"name": "get_safety_events", "description": "Safety events (ESD trips, PSV lifts, H2S alarms, spills, gas releases, electrical faults, regulator non-compliance, near misses): date, category, status, reportable / reported. For one well, or the current engineer's wells when well_id is omitted.",
          "parameters": s({**wid, "days": {"type": "integer", "description": "days back (default 90)"}, "open_only": {"type": "boolean"}})},
+        {"name": "get_definitions", "description": "Plain-language definitions of oil and gas terms and Well Watch concepts (e.g. MAASP, type curve, water cut, SCVF, EPZ, points, tiers, payback, being handled).",
+         "parameters": s({"terms": {"type": "array", "items": {"type": "string"}, "description": "terms to look up; partial words are fine"}}, ["terms"])},
+        {"name": "get_my_rules", "description": "The current engineer's flag rules and ranking settings: each rule's conditions, severity, points, group, fix cost and whether it is on.", "parameters": s({})},
         {"name": "portfolio_summary", "description": "Totals for an engineer's wells (or all wells): well count, oil vs type curve last 7 days, wells down, value at risk.",
          "parameters": s({"engineer_id": {"type": "string", "description": "ENG-1..ENG-4; defaults to the current engineer; ALL for every well"}})},
     ]
@@ -69,7 +72,7 @@ class Tools:
     def _ev(self, conv, tool, layer, table, sql, params, rows, title, keys):
         shown = sql
         for k, v in params.items(): shown = shown.replace(":" + k, repr(str(v)))
-        eid = conv.add_evidence({"tool": tool, "layer": layer, "table": table, "sql": " ".join(shown.split()), "title": title,
+        eid = conv.add_evidence({"tool": tool, "layer": layer, "table": table, "tables": [t.strip() for t in table.split("+")], "sql": " ".join(shown.split()), "title": title,
                                  "rows": rows[:200], "row_count": len(rows), "keys": keys})
         return eid
 
@@ -79,7 +82,8 @@ class Tools:
         if well and not re.fullmatch(r"W-\d{3}", well): return {"error": "well_id must look like W-007"}
         if name == "get_ranked_wells":
             rows = ctx.get("ranking") or []
-            eid = self._ev(conv, name, "gold + your flag rules", f"{S}.gold_well_snapshot", "Ranking computed in the app from gold_well_snapshot with your enabled flag rules", {}, rows,
+            eid = self._ev(conv, name, "gold + your flag rules", f"{S}.gold_well_snapshot + {S}.gold_v_well_safety + {S}.gold_v_compliance_items + {S}.gold_v_safety_events + {S}.app_flag_rules",
+                           "Ranking computed in the app (flags.js) from the gold snapshot, safety views, tests and events, using your saved flag rules", {}, rows,
                            f"Today's ranking for {ctx.get('engineer_name', 'all engineers')}", ["well_id"])
             return {"evidence_id": eid, "engineer": ctx.get("engineer_name"), "wells": rows[:MAX_ROWS_TO_MODEL]}
         if name == "get_well_snapshot":
@@ -192,6 +196,23 @@ class Tools:
             eid = self._ev(conv, name, "gold", f"{S}.gold_v_safety_events", sql, p, rows, f"Safety events, last {dd} days, {well or ctx.get('engineer_name', 'portfolio')}", ["event_id"])
             conv.evidence[eid]["summary"] = summary
             return {"evidence_id": eid, "summary": summary, "events": rows[:MAX_ROWS_TO_MODEL]}
+        if name == "get_definitions":
+            terms = [str(t)[:40] for t in (args.get("terms") or [])][:8] or ["Type curve"]
+            conds = " OR ".join(f"lower(term) LIKE :t{i} OR lower(definition) LIKE :t{i}" for i in range(len(terms)))
+            p = {f"t{i}": f"%{t.lower()}%" for i, t in enumerate(terms)}
+            sql = f"SELECT term, topic, definition, source FROM {S}.gold_glossary WHERE {conds} ORDER BY topic, term LIMIT 12"
+            rows = self.q(sql, p)
+            eid = self._ev(conv, name, "gold", f"{S}.gold_glossary", sql, p, rows, "Definitions: " + ", ".join(terms), ["term"])
+            return {"evidence_id": eid, "definitions": rows} if rows else {"evidence_id": eid, "definitions": [], "note": "No glossary entry matches; say the glossary doesn't define it."}
+        if name == "get_my_rules":
+            rules = ctx.get("rules") or []
+            rows = [{"rule": r.get("name"), "on": r.get("enabled"), "severity": r.get("severity"), "points": r.get("weight"), "category": r.get("category"),
+                     "looks_at": r.get("dataset", "well"), "min_matches": r.get("min_count"), "group": r.get("group"), "typical_fix_cost_cad": r.get("fix_cost"),
+                     "conditions": "; ".join(f"{c.get('field')} {c.get('op')} {c.get('value', '')}".strip() for c in (r.get("conditions") or []))} for r in rules[:60]]
+            settings = ctx.get("settings") or {}
+            eid = self._ev(conv, name, "app: your saved flag rules", f"{S}.app_flag_rules + {S}.app_flag_settings", "Rules and ranking settings sent by the app for this engineer", {},
+                           rows + [{"rule": "(ranking settings)", "conditions": json.dumps(settings)}], f"{ctx.get('engineer_name', 'Engineer')}'s flag rules and ranking settings", ["rule"])
+            return {"evidence_id": eid, "settings": settings, "rules": rows}
         return {"error": f"unknown tool {name}"}
 
 
@@ -281,7 +302,7 @@ def run_agent(conv, user_text, ctx, llm, tools, max_steps=8):
     msgs = [{"role": "system", "content": SYSTEM + f"\nCurrent engineer: {ctx.get('engineer_name', 'not set')} ({ctx.get('engineer_id', '')})."}]
     msgs += conv.messages[-12:] + [{"role": "user", "content": user_text}]
     specs = [{"type": "function", "function": t} for t in tool_specs()]
-    trace = []
+    trace, nudged = [], False
     for _ in range(max_steps):
         out = llm(msgs, specs)
         m = out["choices"][0]["message"]
@@ -290,9 +311,19 @@ def run_agent(conv, user_text, ctx, llm, tools, max_steps=8):
             text = m.get("content")
             if isinstance(text, list): text = "".join(p.get("text", "") for p in text if isinstance(p, dict) and p.get("type") == "text")
             text = normalize((text or "").strip())
+            looked_up = [t["evidence_id"] for t in trace if t.get("evidence_id")]
+            if not looked_up and not nudged:  # answered from memory: make it look the answer up before replying
+                nudged = True
+                msgs.append({"role": "assistant", "content": text})
+                msgs.append({"role": "user", "content": "Before answering, call the tool(s) that back your answer (get_definitions for terms, get_my_rules for how flags and ranking work, data tools for anything about wells). Then answer again, citing the evidence ids."})
+                continue
             conv.messages += [{"role": "user", "content": user_text}, {"role": "assistant", "content": text}]
             report, summary = verify(text, conv, user_text)
-            return {"answer": text, "trace": trace, "verification": report, "summary": summary}
+            cited = {c for r in report for c in r["citations"]}
+            sources = [{"id": e, "cited": e in cited} for e in dict.fromkeys(looked_up)]
+            sources += [{"id": e, "cited": True} for e in sorted(cited - set(looked_up), key=lambda x: int(x[1:])) if e in conv.evidence]  # cited from earlier turns
+            summary["sources"] = len(sources); summary["unsourced"] = not sources
+            return {"answer": text, "trace": trace, "verification": report, "summary": summary, "sources": sources}
         msgs.append({"role": "assistant", "content": m.get("content") or "", "tool_calls": calls})
         for c in calls:
             name = c["function"]["name"]
@@ -303,4 +334,6 @@ def run_agent(conv, user_text, ctx, llm, tools, max_steps=8):
             trace.append({"tool": name, "args": args, "evidence_id": result.get("evidence_id"), "error": result.get("error")})
             msgs.append({"role": "tool", "tool_call_id": c["id"], "content": json.dumps(result, default=str)[:12000]})
     text = "I couldn't finish looking that up. Try a narrower question."
-    return {"answer": text, "trace": trace, "verification": [], "summary": {"statements": 0, "ok": 0, "no_source": 0, "number_mismatch": 0, "unknown_citation": 0}}
+    looked_up = list(dict.fromkeys(t["evidence_id"] for t in trace if t.get("evidence_id")))
+    return {"answer": text, "trace": trace, "verification": [], "sources": [{"id": e, "cited": False} for e in looked_up],
+            "summary": {"statements": 0, "ok": 0, "no_source": 0, "number_mismatch": 0, "unknown_citation": 0, "sources": len(looked_up), "unsourced": not looked_up}}

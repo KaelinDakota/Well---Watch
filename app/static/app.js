@@ -445,7 +445,7 @@
     const sub = {daily: `${p.well_id} on ${p.date}`, safety_daily: `${p.well_id} safety readings on ${p.date}`, snapshot: `${p.well_id} production snapshot`, safety_snapshot: `${p.well_id} safety snapshot`,
       economics: `${p.well_id} ${String(p.month).slice(0, 7)}`, test: `test record ${p.bronze_id}`, safety_event: `safety event ${p.bronze_id}`}[p.kind] || p.kind.replace('_', ' ');
     $('#mbox .mbody').innerHTML = `<div class="note" style="margin:4px 0 12px">${esc(sub)} · gold (what the app and the assistant read) → silver (cleaned) → bronze (as received) → raw file</div>` +
-      d.steps.map(s => `<div class="step"><div><span class="layer ${s.layer}">${s.layer}</span> <code class="small">${esc(s.table)}</code></div>
+      d.steps.map(s => `<div class="step"><div><span class="layer ${s.layer}">${s.layer}</span> ${tableUrl(s.table) ? `<a class="small" href="${esc(tableUrl(s.table))}" target="_blank" rel="noopener"><code>${esc(s.table)}</code> ↗</a>` : s.layer === 'raw' ? `<a class="small" href="${esc(D.workspace_url + '/explore/data/volumes/workspace/well_ops/landing')}" target="_blank" rel="noopener"><code>/Volumes/workspace/well_ops/landing</code> ↗</a>` : `<code class="small">${esc(s.table)}</code>`}</div>
         ${s.note ? `<div class="note" style="margin:3px 0">${esc(s.note)}</div>` : ''}
         ${(s.rules || []).length ? `<div class="rulebox"><b>Cleaning rules applied:</b>${[...new Map(s.rules.map(r => [r.rule_id, r])).values()].map(r => `<div><code>${esc(r.rule_id)}</code> ${esc(r.description)}</div>`).join('')}</div>` : ''}
         ${s.files ? `<div class="rulebox">${s.files.map(f => `📄 ${esc(f)}`).join('<br>')}</div>` : ''}
@@ -605,7 +605,7 @@
     chat.id = null; chat.evidence = {};
     const ex = ['What should I look at first today?', 'Are there any safety issues on my wells?', 'Which of my tests and inspections are overdue?', RANK[0] ? `Why is ${RANK[0].well_id} ranked first?` : null,
       'Which production problems pay back fastest?'].filter(Boolean);
-    $('#msgs').innerHTML = `<div class="muted small">Ask about ${esc(engName() || 'your')}'s wells: production, safety, tests, events. The assistant can only answer from the gold tables and your flag ranking. Every number links to the rows it came from ([E1] chips), and each answer is checked: cited numbers must appear in the cited data. It does not make safety decisions.</div>
+    $('#msgs').innerHTML = `<div class="muted small">Ask about ${esc(engName() || 'your')}'s wells: production, safety, tests, events. The assistant can only answer from the gold tables and your flag ranking. Every answer ends with its sources, linked to the tables in Databricks and traceable to the raw files. Facts carry [E1] chips, and each answer is checked: cited numbers must appear in the cited data. It does not make safety decisions.</div>
       <div class="sugg">${ex.map(q => `<button>${esc(q)}</button>`).join('')}</div>`;
     document.querySelectorAll('.sugg button').forEach(b => b.onclick = () => ask(b.textContent));
   }
@@ -621,7 +621,7 @@
       dollars_per_day_at_risk: r.value, fix_cost_cad: r.fix_cost, payback_days: r.payback_days,
       flags: r.flags.map(f => ({rule: f.rule_name, severity: f.severity, category: f.category, message: f.message, being_handled: f.handled ? (f.handled.note || 'yes') : false, back_because: f.resurfaced || null}))}));
     try {
-      const res = await post('api/chat', {conversation_id: chat.id, message: q, engineer_id: ENG, engineer_name: engName(), ranking, safety_first: SAFETY_FIRST, ranking_mode: MODE});
+      const res = await post('api/chat', {conversation_id: chat.id, message: q, engineer_id: ENG, engineer_name: engName(), ranking, rules: RULES, safety_first: SAFETY_FIRST, ranking_mode: MODE, wo_handled: WO_HANDLED});
       chat.id = res.conversation_id; Object.assign(chat.evidence, res.evidence);
       $('#pending').outerHTML = `<div class="m a">${renderAnswer(res)}</div>`;
     } catch (e) { $('#pending').outerHTML = `<div class="m a"><span style="color:var(--crit)">Error: ${esc(e.message)}</span></div>`; }
@@ -642,12 +642,25 @@
       if (b) { if (!inList) { out += '<ul>'; inList = true; } out += `<li>${b[1]}</li>`; } else { if (inList) { out += '</ul>'; inList = false; } out += `<p>${l}</p>`; } }
     if (inList) out += '</ul>';
     const s = res.summary, bad = s.no_source + s.number_mismatch + s.unknown_citation;
+    if (s.unsourced) return out + sourcesHtml(res);
     out += s.statements ? `<div class="verdict ${bad ? 'bad' : 'ok'}">${bad ? `⚠ ${s.ok} of ${s.statements} factual statements verified. Highlighted text could not be matched to the cited data; check it before relying on it.`
       : `✓ All ${s.statements} factual statement${s.statements > 1 ? 's' : ''} verified against the cited data.`}</div>` : '';
+    out += sourcesHtml(res);
     if (res.trace.length) out += `<div class="trace">Looked up: ${res.trace.map(t => `${esc(t.tool.replace(/_/g, ' '))}${t.args.well_id ? ' ' + esc(t.args.well_id) : ''}${t.evidence_id ? ` → <span class="cite" data-ev="${t.evidence_id}">${t.evidence_id}</span>` : t.error ? ' (error)' : ''}`).join(' · ')}</div>`;
     return out;
   }
-  function bindCites() { document.querySelectorAll('.cite').forEach(c => c.onclick = () => showEvidence(c.dataset.ev)); }
+  // Every answer ends with the sources the app actually queried (built by the app, not written by the model).
+  const tableUrl = t => /^[\w]+\.[\w]+\.[\w]+$/.test(t) ? `${D.workspace_url}/explore/data/${t.split('.').join('/')}` : null;
+  function sourcesHtml(res) {
+    const src = res.sources || [];
+    if (!src.length) return `<div class="verdict bad" style="background:#fde3df;color:var(--crit)">⚠ No data was looked up for this answer, so it has no source. Don't rely on it; try rephrasing the question.</div>`;
+    return `<div class="srcs"><b>Sources (${src.length})</b>${src.map(s => { const e = res.evidence[s.id] || chat.evidence[s.id]; if (!e) return '';
+      const tabs = (e.tables || [e.table]).map(t => { const u = tableUrl(t); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t.split('.').pop())} ↗</a>` : esc(t); }).join(', ');
+      return `<div class="src"><span class="cite" data-ev="${s.id}">${s.id}</span> ${esc(e.title)}${s.cited ? '' : ' <span class="muted">(checked, not cited)</span>'}
+        <div class="muted">${esc(e.row_count)} row${e.row_count === 1 ? '' : 's'} from ${tabs} · <a class="lk" data-ev2="${s.id}">view rows and trace to raw file</a></div></div>`; }).join('')}</div>`;
+  }
+  function bindCites() {
+    document.querySelectorAll('[data-ev2]').forEach(c => c.onclick = () => showEvidence(c.dataset.ev2)); document.querySelectorAll('.cite').forEach(c => c.onclick = () => showEvidence(c.dataset.ev)); }
   function showEvidence(id) {
     const e = chat.evidence[id];
     if (!e) { showModal(`<div class="mhead"><h2>${esc(id)}</h2><button class="btn sec close" id="mx">Close</button></div><div class="mbody"><div class="empty">The assistant cited evidence that doesn't exist. Treat that statement as unsupported.</div></div>`); return; }
@@ -664,7 +677,7 @@
       return null;
     };
     showModal(`<div class="mhead"><span class="cite" style="font-size:13px">${esc(id)}</span><h2>${esc(e.title)}</h2><button class="btn sec close" id="mx">Close</button></div>
-      <div class="mbody"><div><span class="layer ${layer}">${esc(e.layer)}</span> <code class="small">${esc(e.table)}</code> · <span class="muted small">tool: ${esc(e.tool)} · ${e.row_count} row${e.row_count === 1 ? '' : 's'}</span></div>
+      <div class="mbody"><div><span class="layer ${layer}">${esc(e.layer)}</span> ${(e.tables || [e.table]).map(t => tableUrl(t) ? `<a class="small" href="${esc(tableUrl(t))}" target="_blank" rel="noopener"><code>${esc(t)}</code> ↗</a>` : `<code class="small">${esc(t)}</code>`).join(' ')} · <span class="muted small">tool: ${esc(e.tool)} · ${e.row_count} row${e.row_count === 1 ? '' : 's'}</span></div>
         <h3>Query the assistant ran</h3><pre class="sql">${esc(e.sql)}</pre>
         ${e.summary ? `<h3>Summary computed by the tool (not by the model)</h3>${rowsTable([e.summary])}` : ''}
         <h3>Rows returned <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· "trace" follows a row back to silver, bronze and the raw file</span></h3>

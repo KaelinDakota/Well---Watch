@@ -91,7 +91,7 @@ def bundle():
                                     FROM {S}.app_well_attributes) WHERE rn = 1"""),
             "test_catalog": cached("cat", lambda: query(f"SELECT * FROM {S}.silver_test_catalog ORDER BY test_group, test_type")),
             "cleaning_rules": cached("clean", lambda: query(f"SELECT rule_id, description FROM {S}.silver_cleaning_rules ORDER BY rule_id")),
-            "model": LLM_ENDPOINT}
+            "model": LLM_ENDPOINT, "workspace_url": ws().config.host.rstrip("/")}
 
 
 @app.get("/api/well/{well_id}")
@@ -382,7 +382,9 @@ def chat(body: dict):  # sync: FastAPI runs it in a worker thread, so a long mod
         conv = CONVS.get(body.get("conversation_id") or "")
         if conv is None:
             conv = agent.Conversation(); CONVS[conv.id] = conv
-    ctx = {"engineer_id": eng, "engineer_name": body.get("engineer_name") or eng, "ranking": ranking}
+    rules = [r for r in (body.get("rules") or [])[:100] if isinstance(r, dict)]
+    settings = {k: body.get(k) for k in ("safety_first", "ranking_mode", "wo_handled") if k in body}
+    ctx = {"engineer_id": eng, "engineer_name": body.get("engineer_name") or eng, "ranking": ranking, "rules": rules, "settings": settings}
     res = agent.run_agent(conv, text, ctx, llm, agent.Tools(query, S))
     ev = {}
     for t in res["trace"]:
@@ -391,4 +393,6 @@ def chat(body: dict):  # sync: FastAPI runs it in a worker thread, so a long mod
     for r in res["verification"]:
         for i in r["citations"]:
             if i in conv.evidence: ev[i] = conv.evidence[i]
+    for src in res.get("sources", []):
+        if src["id"] in conv.evidence: ev[src["id"]] = conv.evidence[src["id"]]
     return {"conversation_id": conv.id, **res, "evidence": ev, "model": LLM_ENDPOINT}
