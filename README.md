@@ -4,6 +4,8 @@ A Databricks App for production engineers who look after hundreds of wells. Ever
 
 All data is synthetic: 200 wells, 4 engineers, 6 months of daily data.
 
+**New to the app, or to oil and gas?** Read the [user guide](docs/USER_GUIDE.md). It covers how to read each screen, what the colours mean, a glossary, and a five-minute demo script. This README is the technical overview.
+
 ## What's in here
 
 | Path | What it is |
@@ -13,10 +15,14 @@ All data is synthetic: 200 wells, 4 engineers, 6 months of daily data.
 | `pipeline/01_bronze.sql` | Bronze layer: raw files loaded as-is from the `landing` volume, with `_source_file`, `_loaded_at` and `_bronze_id` on every row. |
 | `pipeline/02_silver.sql` | Silver layer: cleaned tables, plus `silver_cleaning_rules`. Silver deduplicates resends, converts E3M3 to MCF, nulls sensor errors, cleans well names and uses `ai_classify` to categorize downtime text. Each silver row records which rules touched it. |
 | `pipeline/03_gold.sql` | Gold layer: `gold_daily_well` (with type-curve targets), `gold_downtime_events`, `gold_monthly_economics` and `gold_well_snapshot`, which holds one row per well with every field the flag rules use. |
+| `pipeline/05_ranking.sql` | Tables for "being handled" acknowledgements (`app_flag_acks`), per-well fix cost estimates (`app_fix_estimates`), and ranking settings. |
+| `pipeline/06_glossary.sql` | `gold_glossary`: plain-language definitions the assistant cites for "what does X mean?" questions. |
 | `pipeline/04_safety.sql` | Safety layer. Bronze, silver and gold safety tables; `ai_classify` sets event categories. Views merge system data with what engineers log in the app: `gold_v_compliance_items` (latest of each test type with its due date), `gold_v_safety_events` and `gold_v_well_safety`. Also creates the `app_*` tables the app writes to. |
-| `app/app.py` | FastAPI backend. Endpoints: `/api/bundle`, `/api/well/{id}`, `PUT /api/rules/{engineer}`, `/api/lineage` and `/api/chat`. |
+| `app/app.py` | FastAPI backend. Endpoints: `/api/bundle`, `/api/well/{id}`, `PUT /api/rules/{engineer}`, `/api/lineage`, `/api/chat`, plus the endpoints engineers write through: `/api/tests`, `/api/events` (and `/api/events/{id}/update`), `/api/custom_fields`, `/api/attributes/{well}`, `/api/acks` and `/api/estimates`. |
 | `app/agent.py` | Our own chat agent (details below). |
-| `app/static/` | The UI: *My day*, *My wells*, *Flag rules*, a well detail view with charts, the chat panel, and evidence and lineage viewers. `flags.js` is the deterministic rule and ranking engine. |
+| `app/static/` | The deployed UI: *My day*, *My wells*, *Safety*, *Flag rules*, the well page, the chat panel, and the evidence and lineage viewers. `flags.js` is the deterministic rule and ranking engine. |
+| `web/` | Source copies of the three UI files. Edit these, then copy them to `app/static/` before deploying. |
+| `docs/` | The [user guide](docs/USER_GUIDE.md) and its screenshots. |
 | `deploy.py` | Deploys with the Databricks Python SDK. It uploads the source, sets up the app resources (SQL warehouse, model endpoint) and the Unity Catalog grants, then deploys. |
 | `run_sql.py` | Runs the pipeline SQL files against a warehouse. |
 
@@ -58,6 +64,21 @@ Rules are plain JSON: conditions, a severity, a weight in points, and optionally
 Points still break ties. Rules in the same group, such as "casing pressure near MAASP" and "casing pressure rising", count once at the highest weight instead of adding up. The starter fix costs are rough placeholders; engineers should replace them with their own numbers.
 
 Saved to: `app_flag_rules`, `app_flag_settings`, `app_flag_acks` and `app_fix_estimates` (created by `pipeline/05_ranking.sql`).
+
+## Showing why a well is flagged
+
+- **Well page.** A *Why this well is flagged* box at the top gives, for each open flag:
+  - the measured value against the rule's threshold;
+  - the recent days that crossed it, worked out from the daily data on the page;
+  - links to the test or event records involved.
+
+  It also lists which checks are within limits. Boxes and charts behind a flag get a red border and move first. Safety charts draw each enabled rule's threshold, and readings past it show as red dots.
+- **Trace views.** `buildFocus()` in `app.js` maps each fired condition to the related columns in the gold, silver and bronze rows (the `RELATED` table). It then:
+  - turns cells that cross the rule's threshold red, by reusing `FlagEngine.matchValue`;
+  - shades the related columns;
+  - moves highlighted columns next to well and date, and lists highlighted fields first in single-record views;
+  - shows a *Look at these first* banner.
+- **Tests.** The Status column (OK, due soon, overdue, failed) carries the colour. *Safety-critical* is a neutral label about how important the test is, not its result.
 
 ## How the assistant stays grounded
 
