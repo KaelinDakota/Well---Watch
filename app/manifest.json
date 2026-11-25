@@ -1,0 +1,81 @@
+{
+  "name": "well-watch",
+  "displayName": "Well Watch",
+  "version": "1.0.0",
+  "description": "Daily well triage for oil and gas production engineers: ranked flags, safety tracking, a grounded chat assistant and agent-drafted alerts. Synthetic data.",
+  "owner": "kaelin@dakotaanalytics.com",
+  "type": "web",
+  "platform": "databricks-apps",
+  "runtime": {
+    "language": "python",
+    "version": "3.11"
+  },
+  "framework": "fastapi",
+  "manifest": "app.yaml",
+  "install": "pip install -r requirements.txt",
+  "processes": [
+    {
+      "name": "web",
+      "type": "web",
+      "command": "uvicorn app:app --host 0.0.0.0 --port ${PORT:-${DATABRICKS_APP_PORT:-8000}}",
+      "entrypoint": "app:app",
+      "port": 8000,
+      "healthCheck": {
+        "path": "/",
+        "expectStatus": 200
+      }
+    }
+  ],
+  "env": [
+    {
+      "name": "DATABRICKS_WAREHOUSE_ID",
+      "required": true,
+      "description": "SQL warehouse id (Databricks Apps resource 'sql-warehouse')"
+    },
+    {
+      "name": "WELL_SCHEMA",
+      "required": false,
+      "default": "workspace.well_ops",
+      "description": "Unity Catalog schema with the bronze/silver/gold tables"
+    },
+    {
+      "name": "LLM_ENDPOINT",
+      "required": false,
+      "default": "databricks-gpt-oss-120b",
+      "description": "Chat model serving endpoint (resource 'llm-endpoint')"
+    },
+    {
+      "name": "ALERT_DRAFT_MODEL",
+      "required": false,
+      "default": "databricks-qwen3-next-80b-a3b-instruct",
+      "description": "Model Greg drafts alerts with"
+    },
+    {
+      "name": "ALERT_CHECK_MODEL",
+      "required": false,
+      "default": "databricks-gpt-oss-120b",
+      "description": "Model the alert checker reviews with"
+    }
+  ],
+  "resources": [
+    {
+      "name": "sql-warehouse",
+      "type": "sql_warehouse",
+      "permission": "CAN_USE"
+    },
+    {
+      "name": "llm-endpoint",
+      "type": "serving_endpoint",
+      "permission": "CAN_QUERY"
+    }
+  ],
+  "data": {
+    "schema": "workspace.well_ops",
+    "build": "Run pipeline/01_bronze.sql to pipeline/08_alerts.sql in order",
+    "synthetic": true
+  },
+  "docs": {
+    "readme": "README.md",
+    "userGuide": "docs/USER_GUIDE.md"
+  }
+}
