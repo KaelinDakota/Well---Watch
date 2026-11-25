@@ -25,6 +25,7 @@
 
   let D = null, ENG = null, RULES = [], MODE = 'value', SAFETY_FIRST = true, WO_HANDLED = false, ACKS = {}, EST = {}, RANK = [], ITEMS = {test: [], event: []}, view = 'day', rulesSource = 'default', showAll = false;
   let wellSort = {k: 'score', dir: -1}, wellFilter = '', ruleFilter = 'All';
+  let wellView = 'all', wellShowOk = false, wellDense = (() => { try { return localStorage.getItem('ww-dense') !== '0'; } catch (e) { return true; } })();
   const chat = {id: null, busy: false, evidence: {}};
 
   // ---------------- load ----------------
@@ -340,17 +341,36 @@
       ['open_safety_events', 'Open events', 1], ['uptime_14d_pct', 'Uptime %', 1], ['value_at_risk_cad_day', 'At risk $/d', 1]];
     let rows = myWells().map(w => Object.assign({}, w, {score: sc[w.well_id]?.score || 0, _f: sc[w.well_id]}));
     if (wellFilter) { const q = wellFilter.toLowerCase(); rows = rows.filter(w => [w.well_id, w.well_name, w.reservoir, w.lift_type, w.area, w.sour_class].join(' ').toLowerCase().includes(q)); }
+    const grp = w => !w._f || !w._f.n ? 'none' : w._f.tier;
+    const views = [['all', 'All'], ['flagged', 'Flagged'], ['safety', 'Safety'], ['production', 'Production'], ['watch', 'Watch list'], ['handled', 'Being handled'], ['none', 'No flags']];
+    const base = rows, count = v => v === 'all' ? base.length : v === 'flagged' ? base.filter(w => grp(w) !== 'none').length : base.filter(w => grp(w) === v).length;
+    if (wellView === 'flagged') rows = rows.filter(w => grp(w) !== 'none');
+    else if (wellView !== 'all') rows = rows.filter(w => grp(w) === wellView);
     rows.sort((a, b) => { const x = a[wellSort.k], y = b[wellSort.k]; return (x === y ? 0 : x === null ? 1 : y === null ? -1 : x > y ? 1 : -1) * wellSort.dir; });
-    $('#main').innerHTML = `<div class="bar"><input id="wf" placeholder="Filter by well, reservoir, lift, area, sour class" value="${esc(wellFilter)}" style="width:320px"><span class="note">${rows.length} wells · click a column to sort · click a well to open it</span></div>
-      <div class="card" style="overflow:auto"><table><thead><tr>${cols.map(([k, l, n]) => `<th class="s ${n ? 'n' : ''}" data-k="${k}">${l}${wellSort.k === k ? (wellSort.dir < 0 ? ' ' + ic('down') : ' ' + ic('up')) : ''}</th>`).join('')}<th>Flags</th></tr></thead>
-      <tbody>${rows.map(w => `<tr class="click" data-well="${w.well_id}"><td><b>${w.well_id}</b> ${esc(w.well_name)}<div class="muted small">${esc(w.reservoir)} · ${esc(w.lift_type)} · ${esc(w.sour_class)}</div></td>
+    // In "All", sorted by score, wells with no flags fold into one row at the bottom.
+    const fold = wellView === 'all' && wellSort.k === 'score' && wellSort.dir < 0 && !wellFilter && !wellShowOk;
+    const okRows = fold ? rows.filter(w => grp(w) === 'none') : [];
+    const shown = fold ? rows.filter(w => grp(w) !== 'none') : rows;
+    const meta = w => `${esc(w.reservoir)} · ${esc(w.lift_type)} · ${esc(w.sour_class)}`;
+    const row = w => `<tr class="click" data-well="${w.well_id}"><td><b>${w.well_id}</b> ${esc(w.well_name)}${wellDense ? ` <span class="muted small">${meta(w)}</span>` : `<div class="muted small">${meta(w)}</div>`}</td>
         <td class="n">${w._f ? `<b>${w.score}</b> <span class="muted small">#${w._f.rank}</span>` : '<span class="muted">0</span>'}</td>
         <td class="n">${fmt(w.perf_ratio_7d, 2)}×</td><td class="n">${fmt(w.oil_7d_bopd, 1)}</td><td class="n">${fmt(w.water_cut_7d_pct, 1)}</td>
         <td class="n">${fmt(w.casing_pct_of_maasp, 0)}%</td><td class="n">${fmt(w.sc_psi_max_7d, 0)}</td><td class="n">${fmt(w.h2s_ambient_max_7d_ppm)}</td><td class="n">${fmt(w.tests_overdue)}</td>
         <td class="n">${fmt(w.open_safety_events)}</td><td class="n">${fmt(w.uptime_14d_pct, 1)}</td><td class="n">${fmt(w.value_at_risk_cad_day)}</td>
-        <td>${w._f && w._f.tier === 'handled' ? '<span class="pill">being handled</span>' : w._f ? `${w._f.safety && w._f.safety !== 'Review' ? SAFETY_TAG : ''}<span class="pill ${w._f.worst === 'Critical' ? 'crit' : w._f.worst === 'Warning' ? 'warn' : 'rev'}">${w._f.n} flag${w._f.n > 1 ? 's' : ''}</span>` : '<span class="pill ok">OK</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+        <td>${w._f && w._f.tier === 'handled' ? '<span class="pill">being handled</span>' : w._f && w._f.n ? `${w._f.safety && w._f.safety !== 'Review' ? SAFETY_TAG : ''}<span class="pill ${w._f.worst === 'Critical' ? 'crit' : w._f.worst === 'Warning' ? 'warn' : 'rev'}">${w._f.n} flag${w._f.n > 1 ? 's' : ''}</span>` : '<span class="pill ok">OK</span>'}</td></tr>`;
+    const total = shown.length + okRows.length;
+    $('#main').innerHTML = `<div class="bar wbar"><input id="wf" placeholder="Filter by well, reservoir, lift, area, sour class" value="${esc(wellFilter)}" style="width:300px">
+        <div class="filt">${views.map(([v, l]) => { const c = count(v); return (c || v === 'all' || v === wellView) ? `<button data-wv="${v}" class="${wellView === v ? 'on' : ''}">${l} ${c}</button>` : ''; }).join('')}</div>
+        <div class="seg" style="margin-left:auto"><button data-dense="1" class="${wellDense ? 'on' : ''}">Compact</button><button data-dense="0" class="${wellDense ? '' : 'on'}">Comfortable</button></div></div>
+      <div class="note" style="margin:0 0 8px">${total} wells · click a column to sort · click a well to open it${fold && okRows.length ? ' · wells with no flags are folded at the bottom' : ''}</div>
+      <div class="card wtable${wellDense ? ' dense' : ''}"><table><thead><tr>${cols.map(([k, l, n]) => `<th class="s ${n ? 'n' : ''}" data-k="${k}">${l}${wellSort.k === k ? (wellSort.dir < 0 ? ' ' + ic('down') : ' ' + ic('up')) : ''}</th>`).join('')}<th>Flags</th></tr></thead>
+      <tbody>${shown.map(row).join('')}${okRows.length ? `<tr class="foldrow" id="showok"><td colspan="${cols.length + 1}">${ic('check')} <b>${okRows.length} wells with no flags</b> <span class="muted">· nothing to look at today</span> <a class="lk">Show them</a></td></tr>` : ''}
+      ${!shown.length && !okRows.length ? `<tr><td colspan="${cols.length + 1}" class="muted">No wells match.</td></tr>` : ''}</tbody></table></div>`;
     $('#wf').oninput = e => { wellFilter = e.target.value; const pos = e.target.selectionStart; renderWells(); $('#wf').focus(); $('#wf').setSelectionRange(pos, pos); };
     document.querySelectorAll('th.s').forEach(th => th.onclick = () => { const k = th.dataset.k; wellSort = {k, dir: wellSort.k === k ? -wellSort.dir : (k === 'well_id' ? 1 : -1)}; renderWells(); });
+    document.querySelectorAll('[data-wv]').forEach(b => b.onclick = () => { wellView = b.dataset.wv; renderWells(); });
+    document.querySelectorAll('[data-dense]').forEach(b => b.onclick = () => { wellDense = b.dataset.dense === '1'; try { localStorage.setItem('ww-dense', wellDense ? '1' : '0'); } catch (e) {} renderWells(); });
+    const so = $('#showok'); if (so) so.onclick = () => { wellShowOk = true; renderWells(); };
     bindCommon($('#main'));
   }
 
