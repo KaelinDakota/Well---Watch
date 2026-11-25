@@ -64,6 +64,8 @@
     $('#send').onclick = send; $('#q').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
     $('#modal').onclick = e => { if (e.target.id === 'modal') $('#modal').hidden = true; };
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('#modal').hidden) $('#modal').hidden = true; else if (!$('#editor').hidden) $('#editor').hidden = true; else $('#drawer').hidden = true; } });
+    const rm = /^report\/([\w-]+)(?:\/(\w+))?/.exec((location.hash || '').slice(1));
+    if (rm) { renderReport(rm[1], rm[2]); return; }
     loadRules(); newChat();
     const h = (location.hash || '').slice(1); if (['day', 'wells', 'safety', 'rules'].includes(h)) view = h;
     toggleChat(store.get('ww-chat') !== 'closed');
@@ -460,35 +462,11 @@
     $('#dx').onclick = () => { $('#drawer').hidden = true; DRAWER_WELL = null; }; $('#dask').onclick = () => ask(`Give me a summary of ${id}: how is it performing, is anything wrong, and are there any safety issues?`);
     $('#dbody').innerHTML = `<div class="empty dots">Loading ${id}</div>`; $('#drawer').hidden = false;
     let d; try { d = await api('api/well/' + id); } catch (e) { $('#dbody').innerHTML = `<div class="empty">Could not load: ${esc(e.message)}</div>`; return; }
-    const kp = [['Oil, last 7 d', fmt(w.oil_7d_bopd, 1) + ' bbl/d'], ['vs type curve', fmt(w.perf_ratio_7d, 2) + '×'], ['Water cut', fmt(w.water_cut_7d_pct, 1) + '% (' + (w.water_cut_change_pts > 0 ? '+' : '') + fmt(w.water_cut_change_pts, 1) + ' pts)'],
-      ['GOR', fmt(w.gor_7d) + ' (' + (w.gor_change_pct > 0 ? '+' : '') + fmt(w.gor_change_pct, 1) + '%)'], ['Casing', fmt(w.casing_psi_7d) + ' psi (' + (w.casing_psi_change > 0 ? '+' : '') + fmt(w.casing_psi_change) + ')'],
-      ['Uptime 14 d', fmt(w.uptime_14d_pct, 1) + '%'], ['Margin (Oct)', '$' + fmt(w.margin_per_boe, 2) + '/boe'], ['At risk', '$' + fmt(w.value_at_risk_cad_day) + '/day']];
-    const fx = buildFocus(id);
-    const alertF = new Set(fx ? Object.keys(fx.cols) : []);
-    if (r) for (const f of r.flags.filter(f => !f.handled)) {
-      if (f.dataset === 'test') alertF.add('tests_overdue');
-      const rule = RULES.find(x => x.id === f.rule_id);
-      if (f.dataset === 'event' && rule && rule.conditions.some(c => /h2s/i.test(String(c.value)))) alertF.add('h2s_ambient_max_7d_ppm');
-    }
-    const BOXF = {'Casing vs MAASP': ['casing_pct_of_maasp', 'casing_psi_max_7d', 'casing_psi_change'], 'Surface casing': ['sc_psi_max_7d', 'sc_psi_change', 'sc_pct_of_limit'],
-      'Flowline vs MAOP': ['flowline_pct_of_maop', 'flowline_psi_max_7d'], 'Vent flow test': ['scvf_status'], 'H2S': ['h2s_ambient_max_7d_ppm', 'h2s_ppm_gas'], 'EPZ': ['residences_in_epz'],
-      'Venting this month': ['vent_pct_of_limit', 'vent_mtd_m3'], 'Tests': ['tests_overdue', 'critical_tests_overdue', 'failed_tests'],
-      'Oil, last 7 d': ['perf_ratio_7d', 'oil_7d_bopd'], 'vs type curve': ['perf_ratio_7d'], 'Water cut': ['water_cut_change_pts', 'water_cut_7d_pct'], 'GOR': ['gor_change_pct', 'gor_7d'],
-      'Casing': ['casing_psi_change', 'casing_psi_7d'], 'Uptime 14 d': ['consecutive_down_days', 'downtime_events_14d', 'uptime_14d_pct'], 'Margin (Oct)': ['margin_per_boe'], 'At risk': ['value_at_risk_cad_day', 'perf_ratio_7d', 'consecutive_down_days']};
-    const boxAlert = l => (BOXF[l] || []).some(f => alertF.has(f));
-    const boxHtml = (l, v, size) => `<div class="kpi ${boxAlert(l) ? 'kpi-alert' : ''}"><div class="n" style="font-size:${size}px">${esc(v)}</div><div class="l">${l}${boxAlert(l) ? ` <b class="flagtxt">${ic('flag')} why it's flagged</b>` : ''}</div></div>`;
-    const sk = [['Casing vs MAASP', `${fmt(w.casing_psi_max_7d)} / ${fmt(w.prod_casing_maasp_psi)} psi (${fmt(w.casing_pct_of_maasp, 0)}%)`], ['Surface casing', `${fmt(w.sc_psi_max_7d, 0)} / ${fmt(w.surface_casing_limit_psi)} psi (${fmt(w.sc_pct_of_limit, 0)}%)`],
-      ['Flowline vs MAOP', `${fmt(w.flowline_psi_max_7d, 0)} / ${fmt(w.flowline_maop_psi)} psi (${fmt(w.flowline_pct_of_maop, 0)}%)`], ['Vent flow test', `${w.scvf_status || 'None'}${w.scvf_rate_m3d ? ' · ' + fmt(w.scvf_rate_m3d) + ' m3/d' : ''}`],
-      ['H2S', `${fmt(w.h2s_ppm_gas)} ppm in gas · ${fmt(w.h2s_ambient_max_7d_ppm)} ppm at surface`], ['EPZ', w.epz_m ? `${fmt(w.epz_m)} m · ${fmt(w.residences_in_epz)} residence${Number(w.residences_in_epz) === 1 ? '' : 's'}` : 'none (sweet)'],
-      ['Venting this month', `${fmt(w.vent_mtd_m3)} / ${fmt(w.vent_limit_m3_month)} m3 (${fmt(w.vent_pct_of_limit, 0)}%)`], ['Tests', `${fmt(w.tests_overdue)} overdue · ${fmt(w.tests_due_30d)} due ≤30 d · ${fmt(w.failed_tests)} failed`]];
+    const {kp, sk, fx, alertF, boxAlert, boxHtml, thr} = wellModel(id, w, r);
     const sd = d.safety_daily, prod = d.daily.map(x => ({date: x.prod_date, y: x.reported ? x.oil_bbl : null, y2: x.target_oil_bopd}));
     const myTests = ITEMS.test.filter(t => t.well_id === id).sort((a, b) => (testState(a) - testState(b)) || (a.days_until_due - b.days_until_due));
     const myNotes = D.notes.filter(n => n.well_id === id);
     const myEvents = ITEMS.event.filter(e => e.well_id === id).sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
-    // rule threshold drawn on each safety chart (red when it's why the well is flagged)
-    const thr = (field, toUnits) => { const rl = RULES.find(x => x.enabled && (x.dataset || 'well') === 'well' && x.conditions.some(c => c.field === field && ['gt', 'gte'].includes(c.op)));
-      if (!rl) return null; const c = rl.conditions.find(c => c.field === field && ['gt', 'gte'].includes(c.op)); const v = toUnits ? toUnits(Number(c.value)) : Number(c.value);
-      return isFinite(v) ? {v, label: `${rl.name}: flag at ${c.op === 'gte' ? '≥' : '>'} ${fmt(c.value, 0)}${toUnits ? '%' : ''}`, on: alertF.has(field)} : null; };
     const charts = (list) => list.map(([fields, html]) => [fields.some(f => alertF.has(f)), html]).sort((a, b) => b[0] - a[0]).map(x => x[1]).join('');
     $('#dbody').innerHTML = `
       ${whyBox(r, fx, d, id, sk.filter(([l]) => !boxAlert(l)).map(([l]) => l))}
@@ -545,6 +523,35 @@
     document.querySelectorAll('#dbody [data-arch]').forEach(a => a.onclick = async () => { await post(`api/notes/${a.dataset.arch}/archive`, {}); await refresh('Note archived'); openWell(id); });
     if ($('#dcf')) $('#dcf').onclick = () => editWellFields(id);
     bindCharts(id);
+  }
+  // Numbers, alert fields and rule thresholds for one well: shared by the well page and the well report.
+  function wellModel(id, w, r) {
+    const kp = [['Oil, last 7 d', fmt(w.oil_7d_bopd, 1) + ' bbl/d'], ['vs type curve', fmt(w.perf_ratio_7d, 2) + '×'], ['Water cut', fmt(w.water_cut_7d_pct, 1) + '% (' + (w.water_cut_change_pts > 0 ? '+' : '') + fmt(w.water_cut_change_pts, 1) + ' pts)'],
+      ['GOR', fmt(w.gor_7d) + ' (' + (w.gor_change_pct > 0 ? '+' : '') + fmt(w.gor_change_pct, 1) + '%)'], ['Casing', fmt(w.casing_psi_7d) + ' psi (' + (w.casing_psi_change > 0 ? '+' : '') + fmt(w.casing_psi_change) + ')'],
+      ['Uptime 14 d', fmt(w.uptime_14d_pct, 1) + '%'], ['Margin (Oct)', '$' + fmt(w.margin_per_boe, 2) + '/boe'], ['At risk', '$' + fmt(w.value_at_risk_cad_day) + '/day']];
+    const fx = buildFocus(id);
+    const alertF = new Set(fx ? Object.keys(fx.cols) : []);
+    if (r) for (const f of r.flags.filter(f => !f.handled)) {
+      if (f.dataset === 'test') alertF.add('tests_overdue');
+      const rule = RULES.find(x => x.id === f.rule_id);
+      if (f.dataset === 'event' && rule && rule.conditions.some(c => /h2s/i.test(String(c.value)))) alertF.add('h2s_ambient_max_7d_ppm');
+    }
+    const BOXF = {'Casing vs MAASP': ['casing_pct_of_maasp', 'casing_psi_max_7d', 'casing_psi_change'], 'Surface casing': ['sc_psi_max_7d', 'sc_psi_change', 'sc_pct_of_limit'],
+      'Flowline vs MAOP': ['flowline_pct_of_maop', 'flowline_psi_max_7d'], 'Vent flow test': ['scvf_status'], 'H2S': ['h2s_ambient_max_7d_ppm', 'h2s_ppm_gas'], 'EPZ': ['residences_in_epz'],
+      'Venting this month': ['vent_pct_of_limit', 'vent_mtd_m3'], 'Tests': ['tests_overdue', 'critical_tests_overdue', 'failed_tests'],
+      'Oil, last 7 d': ['perf_ratio_7d', 'oil_7d_bopd'], 'vs type curve': ['perf_ratio_7d'], 'Water cut': ['water_cut_change_pts', 'water_cut_7d_pct'], 'GOR': ['gor_change_pct', 'gor_7d'],
+      'Casing': ['casing_psi_change', 'casing_psi_7d'], 'Uptime 14 d': ['consecutive_down_days', 'downtime_events_14d', 'uptime_14d_pct'], 'Margin (Oct)': ['margin_per_boe'], 'At risk': ['value_at_risk_cad_day', 'perf_ratio_7d', 'consecutive_down_days']};
+    const boxAlert = l => (BOXF[l] || []).some(f => alertF.has(f));
+    const boxHtml = (l, v, size) => `<div class="kpi ${boxAlert(l) ? 'kpi-alert' : ''}"><div class="n" style="font-size:${size}px">${esc(v)}</div><div class="l">${l}${boxAlert(l) ? ` <b class="flagtxt">${ic('flag')} why it's flagged</b>` : ''}</div></div>`;
+    const sk = [['Casing vs MAASP', `${fmt(w.casing_psi_max_7d)} / ${fmt(w.prod_casing_maasp_psi)} psi (${fmt(w.casing_pct_of_maasp, 0)}%)`], ['Surface casing', `${fmt(w.sc_psi_max_7d, 0)} / ${fmt(w.surface_casing_limit_psi)} psi (${fmt(w.sc_pct_of_limit, 0)}%)`],
+      ['Flowline vs MAOP', `${fmt(w.flowline_psi_max_7d, 0)} / ${fmt(w.flowline_maop_psi)} psi (${fmt(w.flowline_pct_of_maop, 0)}%)`], ['Vent flow test', `${w.scvf_status || 'None'}${w.scvf_rate_m3d ? ' · ' + fmt(w.scvf_rate_m3d) + ' m3/d' : ''}`],
+      ['H2S', `${fmt(w.h2s_ppm_gas)} ppm in gas · ${fmt(w.h2s_ambient_max_7d_ppm)} ppm at surface`], ['EPZ', w.epz_m ? `${fmt(w.epz_m)} m · ${fmt(w.residences_in_epz)} residence${Number(w.residences_in_epz) === 1 ? '' : 's'}` : 'none (sweet)'],
+      ['Venting this month', `${fmt(w.vent_mtd_m3)} / ${fmt(w.vent_limit_m3_month)} m3 (${fmt(w.vent_pct_of_limit, 0)}%)`], ['Tests', `${fmt(w.tests_overdue)} overdue · ${fmt(w.tests_due_30d)} due ≤30 d · ${fmt(w.failed_tests)} failed`]];
+    // rule threshold drawn on each safety chart (red when it's why the well is flagged)
+    const thr = (field, toUnits) => { const rl = RULES.find(x => x.enabled && (x.dataset || 'well') === 'well' && x.conditions.some(c => c.field === field && ['gt', 'gte'].includes(c.op)));
+      if (!rl) return null; const c = rl.conditions.find(c => c.field === field && ['gt', 'gte'].includes(c.op)); const v = toUnits ? toUnits(Number(c.value)) : Number(c.value);
+      return isFinite(v) ? {v, label: `${rl.name}: flag at ${c.op === 'gte' ? '≥' : '>'} ${fmt(c.value, 0)}${toUnits ? '%' : ''}`, on: alertF.has(field)} : null; };
+    return {kp, sk, fx, alertF, boxAlert, boxHtml, thr};
   }
   // Plain statement of what makes this well flagged: measured value vs the rule's threshold, and on which days.
   function whyBox(r, fx, d, id, okBoxes) {
@@ -799,6 +806,98 @@
     draw(); $('#editor').hidden = false;
   }
 
+  // ---------------- Well report (a printable document per well) ----------------
+  // Wells an answer is about: named in the answer text first, then wells the assistant looked up.
+  function answerWells(res) {
+    const known = new Set(D.snapshot.map(w => w.well_id)), out = [];
+    for (const m of String(res.answer || '').matchAll(/\bW-\d{3}\b/g)) if (known.has(m[0]) && !out.includes(m[0])) out.push(m[0]);
+    for (const t of res.trace || []) if (t.args && known.has(t.args.well_id) && !out.includes(t.args.well_id)) out.push(t.args.well_id);
+    return out;
+  }
+  function reportCards(res) {
+    const ws = answerWells(res); if (!ws.length) return '';
+    const tok = Math.random().toString(36).slice(2, 10);
+    const cited = new Set((res.sources || []).map(x => x.id)), ev = {};
+    for (const id of cited) { const e = res.evidence[id] || chat.evidence[id]; if (e) ev[id] = Object.assign({}, e, {rows: (e.rows || []).slice(0, 200)}); }
+    try { localStorage.setItem('ww-rep-' + tok, JSON.stringify({q: res._q, html: res._html, evidence: ev, eng: ENG, at: new Date().toISOString()}));
+      Object.keys(localStorage).filter(k => k.startsWith('ww-rep-')).sort().slice(0, -30).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+    const shown = ws.slice(0, 3);
+    return `<div class="repcards">${shown.map(id => { const w = D.snapshot.find(x => x.well_id === id);
+      return `<a class="repcard" href="#report/${id}/${tok}" target="_blank" rel="noopener">${ic('file', 'md')}<span><b>Well report: ${id}</b> ${esc(w.well_name)}<br><span class="muted small">Flags, key numbers, tests, events, notes and sources. Opens in a new tab; print or save as PDF.</span></span>${ic('ext')}</a>`; }).join('')}
+      ${ws.length > 3 ? `<div class="muted small">Also mentioned: ${ws.slice(3).map(id => `<a class="lk" href="#report/${id}/${tok}" target="_blank" rel="noopener">${id}</a>`).join(', ')}</div>` : ''}</div>`;
+  }
+  async function renderReport(id, tok) {
+    const w = D.snapshot.find(x => x.well_id === id);
+    document.body.classList.add('report-mode');
+    if (!w) { $('#main').innerHTML = `<div class="errcard"><b>No well called ${esc(id)}.</b></div>`; return; }
+    let ctx = null; try { ctx = tok ? JSON.parse(localStorage.getItem('ww-rep-' + tok) || 'null') : null; } catch (e) {}
+    ENG = w.engineer_id; loadRules();
+    if (ctx && ctx.evidence) chat.evidence = ctx.evidence;
+    document.title = `${id} well report · Well Watch`;
+    $('#main').innerHTML = `<div class="empty dots">Building the ${id} report</div>`;
+    let d; try { d = await api('api/well/' + id); } catch (e) { $('#main').innerHTML = `<div class="errcard"><b>The report didn't load.</b><div>${esc(e.message)}</div><button class="btn" onclick="location.reload()">Retry</button></div>`; return; }
+    const r = RANK.find(x => x.well_id === id), act = ACTIVE();
+    const {kp, sk, fx, alertF, boxAlert, thr} = wellModel(id, w, r);
+    const open = r ? r.flags.filter(f => !f.handled) : [], handled = r ? r.flags.filter(f => f.handled) : [];
+    const tests = ITEMS.test.filter(t => t.well_id === id);
+    const attn = tests.filter(t => t.overdue || ['Fail', 'Serious'].includes(t.last_result) || t.days_until_due <= 30).sort((a, b) => (testState(a) - testState(b)) || (a.days_until_due - b.days_until_due));
+    const events = ITEMS.event.filter(e => e.well_id === id && (e.status !== 'Closed' || e.days_ago <= 30)).sort((a, b) => String(b.event_date).localeCompare(String(a.event_date)));
+    const notes = D.notes.filter(n => n.well_id === id);
+    const wos = d.work_orders.filter(o => !/^(closed|complete|completed|cancel)/i.test(String(o.status || '')));
+    const down30 = d.downtime.filter(e => String(e.event_date) >= '2026-10-23');
+    const sd = d.safety_daily, prod = d.daily.map(x => ({date: x.prod_date, y: x.reported ? x.oil_bbl : null, y2: x.target_oil_bopd}));
+    const cands = [
+      [['casing_pct_of_maasp', 'casing_psi_max_7d', 'casing_psi_change'], () => chartBox('Production casing vs MAASP (psi)', 'r_csgm', sd.map(x => ({date: x.reading_date, y: x.casing_psi, y2: x.prod_casing_maasp_psi})), {l1: 'Casing', l2: 'MAASP', kind: 'safety_daily', alert: true, thresh: thr('casing_pct_of_maasp', pct => w.prod_casing_maasp_psi * pct / 100)})],
+      [['sc_psi_max_7d', 'sc_psi_change', 'sc_pct_of_limit'], () => chartBox('Surface casing vs limit (psi)', 'r_scp', sd.map(x => ({date: x.reading_date, y: x.sc_psi, y2: x.surface_casing_limit_psi})), {l1: 'Surface casing', l2: 'Limit', kind: 'safety_daily', alert: true, thresh: thr('sc_pct_of_limit', pct => w.surface_casing_limit_psi * pct / 100)})],
+      [['flowline_pct_of_maop', 'flowline_psi_max_7d'], () => chartBox('Flowline max vs MAOP (psi)', 'r_flp', sd.map(x => ({date: x.reading_date, y: x.flowline_psi_max, y2: x.flowline_maop_psi})), {l1: 'Flowline', l2: 'MAOP', kind: 'safety_daily', alert: true, thresh: thr('flowline_pct_of_maop', pct => w.flowline_maop_psi * pct / 100)})],
+      [['h2s_ambient_max_7d_ppm'], () => chartBox('H2S at surface, daily max (ppm)', 'r_h2s', sd.map(x => ({date: x.reading_date, y: x.h2s_ambient_ppm_max})), {kind: 'safety_daily', alert: true, thresh: thr('h2s_ambient_max_7d_ppm')})],
+      [['water_cut_change_pts'], () => chartBox('Water cut (%)', 'r_wc', d.daily.map(x => ({date: x.prod_date, y: x.water_cut === null ? null : 100 * x.water_cut})), {alert: true})],
+      [['gor_change_pct'], () => chartBox('Gas-oil ratio (scf/bbl)', 'r_gor', d.daily.map(x => ({date: x.prod_date, y: x.gor_scf_bbl})), {alert: true})]];
+    const charts = [chartBox('Oil (bbl/d) vs type curve', 'r_oil', prod, {l1: 'Oil', l2: 'Type curve', alert: ['perf_ratio_7d', 'consecutive_down_days'].some(f => alertF.has(f))})]
+      .concat(cands.filter(([fs]) => fs.some(f => alertF.has(f))).map(([, fn]) => fn())).slice(0, 4);
+    const status = !r ? 'Not flagged by the current rules' : r.tier === 'handled' ? 'Every flag is being handled' : `Rank #${act.indexOf(r) + 1} of ${act.length} today · ${({safety: 'Safety', production: 'Production', watch: 'Watch list'})[r.tier]} tier`;
+    const tiles = [['Today', status], ['Worst flag', r && open.length ? (r.safety_worst ? `${r.safety_worst} (safety)` : r.worst) : 'None'],
+      ['Points', r ? `${r.safety_score ? r.safety_score + ' safety · ' : ''}${r.score} total` : '0'], ['At risk', `$${fmt(w.value_at_risk_cad_day)}/day`]];
+    const kv = (rows) => `<table class="kv"><tbody>${rows.map(([l, v]) => `<tr class="${boxAlert(l) ? 'hit' : ''}"><th>${esc(l)}</th><td>${esc(v)}${boxAlert(l) ? ` <b class="flagtxt">${ic('flag')} flagged</b>` : ''}</td></tr>`).join('')}</tbody></table>`;
+    const tbls = ['gold_well_snapshot', 'gold_v_well_safety', 'gold_daily_well', 'gold_safety_daily', 'gold_v_compliance_items', 'gold_v_safety_events', 'gold_downtime_events', 'silver_workorders', 'app_well_notes', 'app_flag_rules'];
+    const tdesc = {gold_well_snapshot: 'production snapshot and ranking inputs', gold_v_well_safety: 'safety snapshot', gold_daily_well: 'daily production (charts)', gold_safety_daily: 'daily safety readings (charts)',
+      gold_v_compliance_items: 'tests and inspections', gold_v_safety_events: 'safety events', gold_downtime_events: 'downtime', silver_workorders: 'work orders', app_well_notes: 'engineer notes', app_flag_rules: `${engName()}'s flag rules`};
+    const now = new Date();
+    $('#main').innerHTML = `<article class="report">
+      <div class="rtools noprint"><button class="btn" id="rprint">${ic('file')} Print or save as PDF</button><a class="btn sec" href="./#day" target="_blank" rel="noopener">Open Well Watch</a></div>
+      <header class="rhead"><div class="eyebrow">Well report <span class="pill warn" style="margin-left:6px">Synthetic data</span></div>
+        <h1>${id} · ${esc(w.well_name)}</h1>
+        <div class="muted">${esc(w.reservoir)} · ${esc(w.lift_type)} · ${esc(w.area)} · pad ${esc(w.pad)} · ${esc(w.sour_class)}</div>
+        <div class="muted small">Engineer ${esc(w.engineer_name)} · data through ${esc(D.as_of)} · generated ${esc(now.toISOString().slice(0, 16).replace('T', ' '))} UTC · ranked with ${esc(engName())}'s ${rulesSource === 'saved' ? 'saved' : 'default'} rules</div></header>
+      <div class="kpis" style="grid-template-columns:repeat(4,1fr)">${tiles.map(([l, v]) => `<div class="kpi"><div class="n" style="font-size:15px">${esc(v)}</div><div class="l">${l}</div></div>`).join('')}</div>
+      ${ctx && ctx.q ? `<section><h2>Your question</h2><div class="rq">${esc(ctx.q)}</div><div class="ra">${ctx.html || ''}</div></section>` : ''}
+      <section>${whyBox(r, fx, d, id, sk.filter(([l]) => !boxAlert(l)).map(([l]) => l))}</section>
+      <section><h2>Flags (${open.length} open${handled.length ? `, ${handled.length} being handled` : ''})</h2>
+        ${r && r.flags.length ? `<table><thead><tr><th>Severity</th><th>Flag</th><th>What was found</th><th>Next step</th><th class="n">Points</th></tr></thead><tbody>
+          ${r.flags.map(f => `<tr style="${f.handled ? 'opacity:.6' : ''}"><td><span class="sev ${f.severity}">${f.severity}</span></td><td>${F.isSafety(f) ? SAFETY_TAG : ''}<b>${esc(f.rule_name)}</b>${f.handled ? `<div class="muted small">Being handled${f.handled.owner ? ' by ' + esc(f.handled.owner) : ''}${f.handled.until ? ' · follow up by ' + esc(String(f.handled.until).slice(0, 10)) : ''}</div>` : ''}</td>
+            <td>${esc(f.message)}</td><td class="small">${esc(f.action || '')}</td><td class="n">${f.weight}${f.counted === false ? '<div class="muted small">counted once</div>' : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">No flags from the current rules.</div>'}</section>
+      <section class="two"><div><h2>Safety numbers</h2>${kv(sk)}</div><div><h2>Production numbers</h2>${kv(kp)}</div></section>
+      <section><h2>Trends since Aug 1</h2><div class="charts">${charts.join('')}</div></section>
+      <section><h2>Tests and inspections needing attention (${attn.length})</h2>
+        ${attn.length ? `<table><thead><tr><th>Status</th><th>Test</th><th>Last done</th><th>Result</th><th>Next due</th></tr></thead><tbody>${attn.map(t => `<tr><td>${testStatus(t)}</td><td>${esc(t.test_type)} ${t.safety_critical ? SC_LABEL : ''}</td><td>${esc(String(t.last_test_date).slice(0, 10))}</td><td>${esc(t.last_result)}</td><td>${esc(String(t.next_due_date).slice(0, 10))}</td></tr>`).join('')}</tbody></table>` : ''}
+        <div class="muted small">${tests.length - attn.length} other test${tests.length - attn.length === 1 ? '' : 's'} up to date, from the maintenance / integrity system.</div></section>
+      <section><h2>Safety events (open, or in the last 30 days): ${events.length}</h2>
+        ${events.length ? `<table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Status</th><th>Regulator</th></tr></thead><tbody>${events.map(e => `<tr><td>${esc(String(e.event_date).slice(0, 10))}</td><td>${esc(e.category)}</td><td class="muted">${esc(e.description || '')}</td>
+          <td>${e.status === 'Closed' ? 'Closed' : `<span class="pill crit">${ic('x')} Open</span>`}</td><td>${e.reportable ? (e.reported_to_regulator ? 'Reported' : `<span class="pill crit">${ic('x')} Not reported</span>`) : 'Not reportable'}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">None.</div>'}</section>
+      <section><h2>Notes (${notes.length})</h2>${notes.length ? notes.map(n => noteHtml(n, false)).join('') : '<div class="muted">None.</div>'}</section>
+      <section class="two"><div><h2>Open work orders (${wos.length})</h2>${wos.length ? `<table><tbody>${wos.map(o => `<tr><td>${esc(o.wo_number)}</td><td>${esc(o.wo_type)}: ${esc(o.description)}</td><td>${esc(o.status)}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">None.</div>'}</div>
+        <div><h2>Downtime, last 30 days (${down30.length})</h2>${down30.length ? `<table><tbody>${down30.map(e => `<tr><td>${esc(e.event_date)}</td><td>${esc(e.category)}</td><td class="n">${e.is_open ? '<span class="pill crit">open</span>' : fmt(e.hours_lost, 1) + ' h'}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">None.</div>'}</div></section>
+      <section><h2>Sources</h2><div class="note">Every number in this report comes from these tables in Databricks (schema workspace.well_ops). Open a table to see all of its rows.</div>
+        <ul class="rsrc">${tbls.map(t => `<li><a href="${esc(tableUrl('workspace.well_ops.' + t))}" target="_blank" rel="noopener"><code>${t}</code> ${ic('ext')}</a> <span class="muted">${esc(tdesc[t])}</span></li>`).join('')}</ul>
+        ${ctx && ctx.evidence && Object.keys(ctx.evidence).length ? `<div class="note">The answer above cites ${Object.keys(ctx.evidence).map(k => `<span class="cite" data-ev="${k}">${k}</span>`).join(' ')}; click one to see its query and rows.</div>` : ''}</section>
+      <footer class="muted small">Well Watch · synthetic data, not a real well · this report flags issues for review and does not make safety decisions; follow your company's procedures.</footer></article>`;
+    $('#rprint').onclick = () => window.print();
+    const theme = document.documentElement.dataset.theme;
+    window.onbeforeprint = () => { document.documentElement.dataset.theme = 'light'; };
+    window.onafterprint = () => { document.documentElement.dataset.theme = theme; };
+    bindCommon($('#main')); bindCites(); bindCharts(id);
+  }
+
   // ---------------- Chat ----------------
   function toggleChat(open) {
     const o = open === undefined ? $('#chat').hidden : open;
@@ -827,7 +926,7 @@
     try {
       const res = await post('api/chat', {conversation_id: chat.id, message: q, engineer_id: ENG, engineer_name: engName(), ranking, rules: RULES, safety_first: SAFETY_FIRST, ranking_mode: MODE, wo_handled: WO_HANDLED});
       chat.id = res.conversation_id; Object.assign(chat.evidence, res.evidence);
-      $('#pending').outerHTML = `<div class="m a">${renderAnswer(res)}</div>`;
+      res._q = q; $('#pending').outerHTML = `<div class="m a">${renderAnswer(res)}</div>`;
     } catch (e) { $('#pending').outerHTML = `<div class="m a"><span style="color:var(--dk-status-bad)">The assistant couldn't answer: ${esc(e.message)}. Try again in a moment.</span></div>`; }
     chat.busy = false; $('#send').disabled = false; bindCites(); scrollChat();
   }
@@ -849,7 +948,7 @@
     if (s.unsourced) return out + sourcesHtml(res);
     out += s.statements ? `<div class="verdict ${bad ? 'bad' : 'ok'}">${bad ? `${ic('alert')} <span>${s.ok} of ${s.statements} factual statements verified. Highlighted text could not be matched to the cited data; check it before relying on it.</span>`
       : `${ic('check')} <span>All ${s.statements} factual statement${s.statements > 1 ? 's' : ''} verified against the cited data.</span>`}</div>` : '';
-    out += sourcesHtml(res);
+    res._html = out; out += sourcesHtml(res) + reportCards(res);
     if (res.trace.length) out += `<div class="trace">Looked up: ${res.trace.map(t => `${esc(t.tool.replace(/_/g, ' '))}${t.args.well_id ? ' ' + esc(t.args.well_id) : ''}${t.evidence_id ? `, <span class="cite" data-ev="${t.evidence_id}">${t.evidence_id}</span>` : t.error ? ' (error)' : ''}`).join(' · ')}</div>`;
     return out;
   }
