@@ -239,6 +239,21 @@
   @media (max-width: 767px) { .dk-page { padding:16px 16px 80px; } .kpis, .kpis.six { grid-template-columns:repeat(2, minmax(0,1fr)); } .frm { grid-template-columns:1fr; } .frm .full { grid-column:1; } }
   @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
 
+
+  /* ---- alerts (Greg) ---- */
+  .simbar { display:flex; align-items:center; gap:10px; background:var(--dk-status-warn-bg); color:var(--dk-on-surface); border-radius:8px; padding:10px 14px; margin:14px 0 0; font-size:13px; }
+  .simbar .ico { color:var(--dk-status-warn); }
+  .flow { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:10px; font-size:12px; }
+  .flow span { background:var(--dk-surface-container); border-radius:999px; padding:3px 10px; color:var(--dk-on-surface); } .flow .ico { color:var(--dk-on-surface-muted); }
+  .agentsteps { list-style:none; margin:0; padding:0; font-size:13px; } .agentsteps li { display:flex; gap:8px; padding:4px 0; align-items:flex-start; }
+  .agentsteps .who { font-weight:600; min-width:64px; } .agentsteps .iss { color:var(--dk-on-surface-muted); font-size:12px; }
+  .msgtabs { display:flex; gap:6px; margin:6px 0 8px; } .msgtabs button { border:0; background:var(--dk-surface-container); border-radius:999px; padding:4px 12px; font:500 13px/18px var(--dk-font-body); color:var(--dk-on-surface-muted); }
+  .msgtabs button.on { background:var(--dk-surface-container-highest); color:var(--dk-on-surface); font-weight:600; }
+  .alertgrid { display:grid; grid-template-columns:1.5fr 1fr; gap:20px; } .alertgrid textarea { width:100%; min-height:240px; font:13px/19px var(--dk-font-body); }
+  .alertgrid input.subj { width:100%; font-weight:600; margin-bottom:6px; } .addr { font-size:12px; color:var(--dk-on-surface-muted); margin-bottom:6px; }
+  .checks { list-style:none; margin:0; padding:0; font-size:12px; line-height:17px; } .checks li { display:flex; gap:6px; padding:3px 0; }
+  .checks .ok { color:var(--dk-status-ok); } .checks .bad { color:var(--dk-status-bad); }
+  .working { display:flex; align-items:center; gap:10px; padding:30px 0; font-size:14px; }
   /* ---- well report ---- */
   .repcards { display:flex; flex-direction:column; gap:6px; margin-top:10px; }
   .repcard { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border-radius:8px; background:var(--dk-surface-container-lowest); box-shadow:var(--dk-shadow-ambient); color:var(--dk-on-surface); text-decoration:none; font-size:12px; line-height:16px; }
@@ -284,6 +299,7 @@
     <button data-v="day" class="on" role="tab">My day <span class="count" id="c-day"></span></button>
     <button data-v="wells" role="tab">My wells <span class="count" id="c-wells"></span></button>
     <button data-v="safety" role="tab">Safety <span class="count" id="c-safety"></span></button>
+    <button data-v="alerts" role="tab">Alerts <span class="count" id="c-alerts"></span></button>
     <button data-v="rules" role="tab">Flag rules <span class="count" id="c-rules"></span></button>
   </nav>
   <main id="main"><div class="kpis six"><div class="kpi"><span class="skel" style="height:28px;width:60%"></span><span class="skel" style="height:14px;width:80%;margin-bottom:6px"></span></div><div class="kpi"><span class="skel" style="height:28px;width:60%"></span><span class="skel" style="height:14px;width:80%;margin-bottom:6px"></span></div><div class="kpi"><span class="skel" style="height:28px;width:60%"></span><span class="skel" style="height:14px;width:80%;margin-bottom:6px"></span></div><div class="kpi"><span class="skel" style="height:28px;width:60%"></span><span class="skel" style="height:14px;width:80%;margin-bottom:6px"></span></div><div class="kpi"><span class="skel" style="height:28px;width:60%"></span><span class="skel" style="height:14px;width:80%;margin-bottom:6px"></span></div><div class="kpi"><span class="skel" style="height:28px;width:60%"></span><span class="skel" style="height:14px;width:80%;margin-bottom:6px"></span></div></div><div class="card" style="padding:20px"><span class="skel" style="height:16px;width:70%;margin:12px 0"></span><span class="skel" style="height:16px;width:55%;margin:12px 0"></span><span class="skel" style="height:16px;width:80%;margin:12px 0"></span><span class="skel" style="height:16px;width:60%;margin:12px 0"></span><span class="skel" style="height:16px;width:75%;margin:12px 0"></span><span class="skel" style="height:16px;width:50%;margin:12px 0"></span></div></main>

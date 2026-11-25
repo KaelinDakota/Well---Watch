@@ -112,6 +112,17 @@ If it answers without a lookup, the app sends it back to look first. If it still
 
 Each answer ends with a **Sources** list that the app builds from the lookups it actually ran, not from the model's text. Each source links to its tables in Databricks Catalog Explorer, and "view rows and trace to raw file" opens the rows with lineage back to the landing file.
 
+## Agent alerts (Greg and the checker)
+
+`app/alerts.py`, `pipeline/08_alerts.sql`. When a critical flag needs someone told:
+1. Recipients are data, not model output: `gold_alert_routing` (rule, group or category → roles, first role owns the task) joined to `gold_well_contacts` (synthetic directory by area, from `bronze_contact_directory` → `silver_contacts`).
+2. Greg (`ALERT_DRAFT_MODEL`, default `databricks-qwen3-next-80b-a3b-instruct`) drafts email, Teams and SMS as JSON from the well's gold facts, the flag, its rule thresholds and related flags.
+3. The checker runs deterministic checks (numbers in the facts, quoted limits are rule thresholds or MAASP/MAOP, well, severity, next step, due date, report link, only routed people, no claims of action, SMS length) and a model review on a different model (`ALERT_CHECK_MODEL`, default `databricks-gpt-oss-120b`, low reasoning effort). Any failure sends the drafts back to Greg once.
+4. Each model call is capped at 20 s, with a retry on the other model.
+5. Approval writes `app_alert_tasks` (owner, due date, approved messages, checks) and marks the flag and its related flags as being handled. Nothing is sent.
+
+Endpoints: `POST /api/alerts/draft`, `POST /api/alerts/tasks`, `POST /api/alerts/tasks/{id}/status`, `POST /api/alerts/reset_demo`. The pressure-spike demo overlays a simulated reading in the browser only.
+
 ## Results (synthetic answer key)
 
 - **Safety.** 22 planted safety problems across 16 types, plus 5 look-alikes: a planned ESD function test during a turnaround, a known low non-serious vent flow, and an old spill that was closed out and reported. All 22 fire their expected rules and land in their engineer's top 10. None of the look-alikes gets a safety flag. Results are in `workspace.well_eval.safety_scoring`.

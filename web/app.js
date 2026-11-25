@@ -27,6 +27,7 @@
   let wellSort = {k: 'score', dir: -1}, wellFilter = '', ruleFilter = 'All';
   let wellView = 'all', wellShowOk = false, wellDense = (() => { try { return localStorage.getItem('ww-dense') !== '0'; } catch (e) { return true; } })();
   const chat = {id: null, busy: false, evidence: {}};
+  let SIM = null;  // demo: a simulated SCADA reading overlaid on one well
 
   // ---------------- load ----------------
   async function loadBundle() {
@@ -38,7 +39,7 @@
       const v = (attrs[w.well_id] || {})[c.field_key];
       w['x_' + c.field_key] = v === undefined || v === null || v === '' ? null : types[c.field_key] === 'number' ? Number(v) : types[c.field_key] === 'yesno' ? v === 'true' : v;
     }
-    D.attrs = attrs; ITEMS = D.items; D.settings = D.settings || {}; D.acks = D.acks || []; D.estimates = D.estimates || []; D.notes = D.notes || [];
+    D.attrs = attrs; D.alert_tasks = D.alert_tasks || []; if (SIM) applySim(); ITEMS = D.items; D.settings = D.settings || {}; D.acks = D.acks || []; D.estimates = D.estimates || []; D.notes = D.notes || [];
     // notes that report a test or event not yet in the source system: confirmed when a matching record arrives, overdue after expected_by
     for (const n of D.notes) n.state = noteState(n);
     const byWell = {}; for (const n of D.notes) (byWell[n.well_id] = byWell[n.well_id] || []).push(n);
@@ -67,7 +68,7 @@
     const rm = /^report\/([\w-]+)(?:\/(\w+))?/.exec((location.hash || '').slice(1));
     if (rm) { renderReport(rm[1], rm[2]); return; }
     loadRules(); newChat();
-    const h = (location.hash || '').slice(1); if (['day', 'wells', 'safety', 'rules'].includes(h)) view = h;
+    const h = (location.hash || '').slice(1); if (['day', 'wells', 'safety', 'rules', 'alerts'].includes(h)) view = h;
     toggleChat(store.get('ww-chat') !== 'closed');
     render();
   }
@@ -122,14 +123,16 @@
   }
   function render() {
     renderFreshness();
-    const titles = {day: 'My day', wells: 'My wells', safety: 'Safety', rules: 'Flag rules'};
+    const titles = {day: 'My day', wells: 'My wells', safety: 'Safety', rules: 'Flag rules', alerts: 'Alerts'};
     $('#ptitle').textContent = titles[view];
     $('#pmeta').innerHTML = `${esc(engName() || '')}<span class="sep" style="opacity:.5;padding:0 6px">·</span>${myWells().length} wells<span class="sep" style="opacity:.5;padding:0 6px">·</span>Data through ${esc(D.as_of)}`;
     document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
     const ids = myIds();
     $('#c-day').textContent = Math.min(10, ACTIVE().length); $('#c-wells').textContent = ids.size; $('#c-rules').textContent = RULES.filter(r => r.enabled).length;
     $('#c-safety').textContent = RANK.filter(r => r.tier === 'safety').length;
-    ({day: renderDay, wells: renderWells, safety: renderSafety, rules: renderRules})[view]();
+    $('#c-alerts').textContent = needsAlert().length;
+    renderSimBar();
+    ({day: renderDay, wells: renderWells, safety: renderSafety, rules: renderRules, alerts: renderAlerts})[view]();
   }
   function bindCommon(root = document) {
     root.querySelectorAll('[data-well]').forEach(a => a.onclick = () => openWell(a.dataset.well));
@@ -277,7 +280,7 @@
     if (!h) meta.push(`${f.weight} pts${f.counted === false ? ` <span class="muted">(not added: counted once with "${esc(f.counted_with)}")</span>` : ''}`);
     if (!h && f.fix_cost !== null && f.fix_cost !== undefined) meta.push(`fix ≈ $${fmt(f.fix_cost)} <span class="muted">(${esc(f.fix_cost_source)})</span>`);
     const acts = (h ? (h.type === 'ack' ? `<a class="lk" data-unack='${key}'>no longer being handled</a>` : '')
-      : `<a class="lk" data-ack='${key}'>mark as being handled</a>${!f.safety ? ` · <a class="lk" data-est='${key}'>${EST[f.well_id + '|' + f.rule_id] !== undefined ? 'change' : 'add'} fix cost estimate</a>` : ''}`) + ` · <a class="lk" data-note='${key}'>add note</a>`;
+      : `${alertable(f) ? `<a class="lk" data-alert='${key}'>${ic('flag')} draft alert</a> · ` : ''}<a class="lk" data-ack='${key}'>mark as being handled</a>${!f.safety ? ` · <a class="lk" data-est='${key}'>${EST[f.well_id + '|' + f.rule_id] !== undefined ? 'change' : 'add'} fix cost estimate</a>` : ''}`) + ` · <a class="lk" data-note='${key}'>add note</a>`;
     const fnotes = D.notes.filter(n => n.well_id === f.well_id && n.rule_id === f.rule_id);
     return `<div class="flag" style="${h ? 'opacity:.6' : ''}"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? SAFETY_TAG : ''}${f.resurfaced ? `<span class="shield back">${ic('undo')}Back on the list</span>` : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}</div>
       ${f.resurfaced ? `<div class="act" style="color:var(--dk-status-amber)">Back on the list: ${esc(f.resurfaced)}.</div>` : ''}
@@ -308,6 +311,7 @@
     root.querySelectorAll('[data-unack]').forEach(a => a.onclick = async e => { e.stopPropagation(); const {f} = find(a.dataset.unack);
       await post('api/acks', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, cleared: true}); await refresh('Back on the list'); });
     root.querySelectorAll('[data-est]').forEach(a => a.onclick = e => { e.stopPropagation(); estForm(find(a.dataset.est)); });
+    root.querySelectorAll('[data-alert]').forEach(a => a.onclick = e => { e.stopPropagation(); openAlert(find(a.dataset.alert).f); });
     root.querySelectorAll('[data-note]').forEach(a => a.onclick = e => { e.stopPropagation(); const {w, r} = JSON.parse(a.dataset.note); noteForm({well_id: w, rule_id: r}); });
   }
   const addDays = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
@@ -804,6 +808,156 @@
       preview();
     };
     draw(); $('#editor').hidden = false;
+  }
+
+  // ---------------- Alerts: Greg drafts, the checker reviews, the engineer approves ----------------
+  const alertable = f => !f.handled && (f.severity === 'Critical' || (f.severity === 'Warning' && F.isSafety(f)));
+  const myTasks = () => D.alert_tasks.filter(t => t.engineer_id === ENG);
+  const openTaskFor = (w, r) => myTasks().find(t => t.well_id === w && t.rule_id === r && t.status === 'Open');
+  const needsAlert = () => RANK.flatMap(r => r.flags.filter(f => alertable(f) && f.counted !== false && !openTaskFor(f.well_id, f.rule_id)).map(f => ({r, f})))
+    .sort((a, b) => ({Critical: 0, Warning: 1, Review: 2}[a.f.severity] - {Critical: 0, Warning: 1, Review: 2}[b.f.severity]) || (F.isSafety(b.f) - F.isSafety(a.f)) || (b.f.weight - a.f.weight));
+  const siblings = (r, f) => { const g = (RULES.find(x => x.id === f.rule_id) || {}).group; return g && r ? r.flags.filter(x => x !== f && !x.handled && (RULES.find(y => y.id === x.rule_id) || {}).group === g) : []; };
+  function applySim() { const w = D.snapshot.find(x => x.well_id === SIM.well_id); if (w) Object.assign(w, SIM.values); }
+  function simulateSpike(id) {
+    clearSim(false);
+    const w = D.snapshot.find(x => x.well_id === id), maasp = Number(w.prod_casing_maasp_psi);
+    const peak = Math.round(maasp * 0.94), avg = Math.round(maasp * 0.9);
+    SIM = {well_id: id, orig: {casing_psi_max_7d: w.casing_psi_max_7d, casing_pct_of_maasp: w.casing_pct_of_maasp, casing_psi_change: w.casing_psi_change, casing_psi_7d: w.casing_psi_7d},
+      values: {casing_psi_max_7d: peak, casing_pct_of_maasp: 94, casing_psi_change: Math.round(avg - Number(w.casing_psi_7d || 0)), casing_psi_7d: avg}};
+    applySim(); recompute(); render();
+    toast(`New SCADA reading: ${id} production casing at ${fmt(peak)} psi, 94% of MAASP`);
+    const r = RANK.find(x => x.well_id === id), f = r && r.flags.find(x => x.rule_id === 'SAFE_CASING_NEAR_MAASP') || (r && r.flags.find(alertable));
+    if (f) setTimeout(() => openAlert(f, {auto: true}), 900);
+  }
+  function clearSim(rerender = true) {
+    if (!SIM) return; const w = D.snapshot.find(x => x.well_id === SIM.well_id); if (w) Object.assign(w, SIM.orig);
+    SIM = null; if (rerender) { recompute(); render(); toast('Simulation cleared'); }
+  }
+  function renderSimBar() {
+    let b = $('#simbar'); if (!SIM) { if (b) b.remove(); return; }
+    if (!b) { $('.dk-page-head').insertAdjacentHTML('afterend', '<div class="simbar" id="simbar"></div>'); b = $('#simbar'); }
+    b.innerHTML = `${ic('alert')} <span><b>Demo:</b> simulated SCADA reading on <b>${SIM.well_id}</b>, production casing ${fmt(SIM.values.casing_psi_max_7d)} psi (94% of MAASP). Real data is unchanged.</span><button class="btn sec small" id="simclear" style="margin-left:auto">Clear simulation</button>`;
+    $('#simclear').onclick = () => clearSim();
+  }
+  function renderAlerts() {
+    const need = needsAlert(), tasks = myTasks(), open = tasks.filter(t => t.status === 'Open');
+    const late = open.filter(t => String(t.due_date) < D.today), done = tasks.filter(t => t.status === 'Done');
+    const quiet = myWells().filter(w => !RANK.some(r => r.well_id === w.well_id && r.flags.some(f => /CASING/.test(f.rule_id)))).sort((a, b) => b.oil_7d_bopd - a.oil_7d_bopd);
+    const demoDefault = (quiet.find(w => w.lift_type === 'ESP') || quiet[0] || {}).well_id;
+    $('#main').innerHTML = `
+      <div class="card" style="padding:16px 20px"><b style="font:700 16px/22px var(--dk-font-display)">Greg drafts the alerts for you</b>
+        <div class="note" style="margin-top:4px">When a critical flag comes up, Greg (the alerting agent) works out who needs to know from the routing rules and the contact directory, then drafts an email, a Teams message and a text with the readings, the recommended next step and a due date. A second agent checks every draft against the data before you see it. Nothing is sent until you approve, and approving creates a follow-up task.</div>
+        <div class="flow"><span>Flag raised</span>${ic('arrow')}<span>Who to notify</span>${ic('arrow')}<span>Greg drafts</span>${ic('arrow')}<span>Checker reviews</span>${ic('arrow')}<span>You approve</span>${ic('arrow')}<span>Follow-up task</span></div></div>
+      <div class="card" style="padding:14px 20px;margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>Demo: simulate a pressure spike</b>
+        <span class="note">Pretend a new SCADA reading puts a well's production casing at 94% of its MAASP. Greg drafts the alert straight away.</span>
+        <select id="simwell" style="margin-left:auto">${quiet.map(w => `<option value="${w.well_id}" ${w.well_id === demoDefault ? 'selected' : ''}>${w.well_id} ${esc(w.well_name)} (${esc(w.lift_type)})</option>`).join('')}</select>
+        <button class="btn" id="simgo">Simulate spike</button>${SIM ? '<button class="btn sec" id="simclear2">Clear simulation</button>' : ''}${tasks.some(t => t.simulated && t.status === 'Open') ? '<button class="btn sec" id="simreset" title="Cancel follow-up tasks from simulated readings so the demo can run again">Reset demo</button>' : ''}</div>
+      <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-top:12px">
+        <div class="kpi ${need.length ? 'kpi-alert' : ''}"><div class="n">${need.length}</div><div class="l">Flags that need an alert</div></div>
+        <div class="kpi"><div class="n">${open.length}</div><div class="l">Open follow-up tasks</div></div>
+        <div class="kpi ${late.length ? 'kpi-alert' : ''}"><div class="n">${late.length}</div><div class="l">Tasks past due</div></div>
+        <div class="kpi"><div class="n">${done.length}</div><div class="l">Tasks done</div></div></div>
+      <h3>Needs an alert (${need.length}) <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· critical flags, and safety warnings, with no open follow-up task</span></h3>
+      <div class="card">${need.length ? `<table><thead><tr><th>Severity</th><th>Well</th><th>Flag</th><th></th></tr></thead><tbody>${need.map(({r, f}) => `<tr>
+          <td><span class="sev ${f.severity}">${f.severity}</span></td><td><a class="lk" data-well="${f.well_id}"><b>${f.well_id}</b></a> <span class="muted small">${esc(r.fact.well_name)}</span>${SIM && SIM.well_id === f.well_id ? ' <span class="pill warn">simulated</span>' : ''}</td>
+          <td>${F.isSafety(f) ? SAFETY_TAG : ''}<b>${esc(f.rule_name)}</b> <span class="muted">· ${esc(f.message)}</span></td>
+          <td style="white-space:nowrap"><button class="btn small" data-galert='${esc(JSON.stringify({w: f.well_id, r: f.rule_id}))}'>Draft alert</button></td></tr>`).join('')}</tbody></table>` : '<div class="empty">Every critical flag has an alert and a follow-up task.</div>'}</div>
+      <h3>Follow-up tasks (${tasks.length})</h3>
+      <div class="card">${tasks.length ? `<table><thead><tr><th>Task</th><th>Well</th><th>Flag</th><th>Owner</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>${tasks.map(t => `<tr>
+          <td><code class="small">${esc(t.task_id)}</code>${t.simulated ? ' <span class="pill warn">demo</span>' : ''}</td><td><a class="lk" data-well="${t.well_id}"><b>${t.well_id}</b></a></td>
+          <td><span class="sev ${esc(t.severity)}">${esc(t.severity)}</span> ${esc(t.rule_name)}</td><td>${esc(t.owner_name)}<div class="muted small">${esc(t.owner_role)}</div></td>
+          <td>${t.status === 'Open' && String(t.due_date) < D.today ? `<span class="pill crit">${ic('x')} ${esc(t.due_date)}</span>` : esc(t.due_date)}</td>
+          <td>${t.status === 'Done' ? `<span class="pill ok">${ic('check')} Done</span>` : t.status === 'Cancelled' ? '<span class="pill">Cancelled</span>' : '<span class="pill warn">Open</span>'}</td>
+          <td style="white-space:nowrap"><a class="lk" data-tview="${t.task_id}">messages</a> · ${t.status === 'Open' ? `<a class="lk" data-tdone="${t.task_id}">mark done</a>` : `<a class="lk" data-topen="${t.task_id}">reopen</a>`}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="empty">No follow-up tasks yet. Approve an alert to create one.</div>'}</div>`;
+    bindCommon($('#main'));
+    $('#simgo').onclick = () => simulateSpike($('#simwell').value); if ($('#simclear2')) $('#simclear2').onclick = () => clearSim();
+    if ($('#simreset')) $('#simreset').onclick = async () => { const r = await post('api/alerts/reset_demo', {engineer_id: ENG}); clearSim(false); await refresh(`Demo reset: ${r.cancelled} demo task${r.cancelled === 1 ? '' : 's'} cancelled`); };
+    document.querySelectorAll('[data-galert]').forEach(b => b.onclick = () => { const {w, r} = JSON.parse(b.dataset.galert); openAlert(RANK.find(x => x.well_id === w).flags.find(f => f.rule_id === r)); });
+    document.querySelectorAll('[data-tview]').forEach(a => a.onclick = () => viewTask(tasks.find(t => t.task_id === a.dataset.tview)));
+    document.querySelectorAll('[data-tdone],[data-topen]').forEach(a => a.onclick = async () => {
+      const id = a.dataset.tdone || a.dataset.topen; await post(`api/alerts/tasks/${id}/status`, {status: a.dataset.tdone ? 'Done' : 'Open'});
+      await refresh(a.dataset.tdone ? 'Task marked done' : 'Task reopened'); });
+  }
+  const checksHtml = (checks, review, revised) => `<ul class="checks">${checks.map(c => `<li>${c.ok ? `<span class="ok">${ic('check')}</span>` : `<span class="bad">${ic('x')}</span>`}<span><b>${esc(c.name)}</b> <span class="muted">· ${esc(c.detail)}</span></span></li>`).join('')}
+      ${review ? `<li>${review.verdict === 'pass' ? `<span class="ok">${ic('check')}</span>` : `<span class="bad">${ic('alert')}</span>`}<span><b>Model review: ${review.verdict === 'pass' ? 'accurate, right audience and urgency' : esc(review.verdict)}</b>${(review.issues || []).length ? `<br><span class="muted">${review.issues.map(esc).join('<br>')}</span>` : ''}</span></li>` : ''}</ul>
+      ${revised ? `<div class="note" style="margin-top:6px">${ic('undo')} The checker sent the first draft back and Greg revised it. The checks above are on the revised version.</div>` : ''}`;
+  async function openAlert(f, opts = {}) {
+    const r = RANK.find(x => x.well_id === f.well_id), rule = RULES.find(x => x.id === f.rule_id) || {};
+    const simulated = SIM && SIM.well_id === f.well_id ? SIM.values : null;
+    showModal(`<div class="mhead"><h2>${opts.auto ? 'New critical flag · ' : ''}Alert for ${f.well_id} · ${esc(f.rule_name)}</h2><button class="btn sec close" id="mx">Close</button></div>
+      <div class="mbody" id="abody"><div class="flag" style="margin:0 0 8px"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? SAFETY_TAG : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}</div></div>
+        <div class="working"><span class="dots muted">Greg is finding who to notify and drafting the alert; the checker reviews it before you see it</span></div></div>`);
+    let res;
+    const body = {well_id: f.well_id, engineer_id: ENG, engineer_name: engName(), simulated, report_url: location.origin + location.pathname + '#report/' + f.well_id,
+      flag: {rule_id: f.rule_id, rule_name: f.rule_name, group: rule.group || '', category: f.category || rule.category, severity: f.severity, message: f.message, action: f.action,
+        evidence: (f.evidence || []).map(e => ({label: e.label || '', value: String(e.value ?? '')})),
+        related: siblings(r, f).map(x => ({rule_name: x.rule_name, message: x.message})),
+        thresholds: (rule.conditions || []).filter(c => !['is_true', 'is_false'].includes(c.op)).map(c => { const fd = F.fieldOf(rule.dataset || 'well', c.field); return {measure: fd ? fd.label : c.field, flags_when: c.op, value: c.value}; })}};
+    try { res = await post('api/alerts/draft', body); } catch (e) {
+      $('#abody').insertAdjacentHTML('beforeend', `<div class="errcard"><b>Greg couldn't draft this alert.</b><div>${esc(e.message)}</div><button class="btn" id="aretry">Try again</button></div>`);
+      $('.working').remove(); $('#aretry').onclick = () => openAlert(f, opts); return; }
+    const prim = res.recipients.find(x => x.primary), cc = res.recipients.filter(x => !x.primary);
+    let tab = 'email'; const d = Object.assign({}, res.drafts);
+    $('#abody').innerHTML = `<div class="flag" style="margin:0 0 10px"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? SAFETY_TAG : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}${res.simulated ? ' <span class="pill warn">simulated reading</span>' : ''}</div></div>${siblings(r, f).length ? `<div class="note" style="margin:-4px 0 10px">Also covers the related flag${siblings(r, f).length > 1 ? 's' : ''}: ${siblings(r, f).map(x => `<b>${esc(x.rule_name)}</b> (${esc(x.message)})`).join('; ')}.</div>` : ''}
+      <div class="alertgrid"><div>
+        <h3 style="margin-top:0">Messages <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· edit anything before approving</span></h3>
+        <div class="msgtabs"><button data-mt="email" class="on">Email</button>${prim.channels.includes('teams') ? '<button data-mt="teams">Teams</button>' : ''}${prim.channels.includes('text') ? '<button data-mt="text">Text</button>' : ''}</div>
+        <div id="mpane"></div>
+      </div><div>
+        <h3 style="margin-top:0">Who gets it</h3>
+        ${res.recipients.map(x => `<div style="margin-bottom:8px;font-size:13px"><b>${esc(x.name)}</b> · ${esc(x.role)}${x.primary ? ' <span class="pill">owns the task</span>' : ''}<div class="muted small">${esc(x.why)} · ${x.channels.join(', ')}</div></div>`).join('')}
+        <div class="muted small">From the alert routing rules (<a class="lk" href="${esc(tableUrl('workspace.well_ops.gold_alert_routing'))}" target="_blank" rel="noopener">gold_alert_routing</a>) and the contact directory (<a class="lk" href="${esc(tableUrl('workspace.well_ops.gold_well_contacts'))}" target="_blank" rel="noopener">gold_well_contacts</a>), not chosen by the model.</div>
+        <h3>What the agents did</h3>
+        <ul class="agentsteps">${res.steps.map(s => `<li><span class="who">${esc(s.agent)}</span><span>${esc(s.action)}${s.secs !== undefined ? ` <span class="muted small">· ${esc(s.model || '')}, ${s.secs} s</span>` : ''}${(s.issues || []).length ? `<div class="iss">${s.issues.map(esc).join('<br>')}</div>` : ''}</span></li>`).join('')}</ul>
+        <h3>Checker</h3>${checksHtml(res.checks, res.review, res.revised)}
+        <h3>Follow-up task</h3>
+        <div class="frm" style="grid-template-columns:1fr 1fr"><div><label>Owner</label><select id="a-owner">${res.recipients.map((x, i) => `<option value="${i}">${esc(x.name)} (${esc(x.role)})</option>`).join('')}</select></div>
+          <div><label>Due</label><input id="a-due" type="date" value="${esc(res.due_date)}"></div></div>
+        <div class="note">Approving marks the flag as being handled by the owner until the due date. If the reading gets worse, the flag comes back.</div>
+      </div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center">
+        <button class="btn" id="aok">${ic('check')} Approve and create follow-up task</button>
+        <a class="btn sec" id="amail" target="_blank" rel="noopener">Open in email app</a><button class="btn sec" id="acopy">Copy this message</button><button class="btn sec" id="aredo">Redraft</button>
+        <span class="note" style="margin-left:auto">Nothing is sent from Well Watch. Send from your email or Teams.</span></div>`;
+    const mailto = () => `mailto:${encodeURIComponent(prim.email)}?cc=${encodeURIComponent(cc.map(x => x.email).join(','))}&subject=${encodeURIComponent(d.email_subject || '')}&body=${encodeURIComponent(d.email_body || '')}`;
+    const pane = () => {
+      document.querySelectorAll('[data-mt]').forEach(b => b.classList.toggle('on', b.dataset.mt === tab));
+      $('#mpane').innerHTML = tab === 'email' ? `<div class="addr">To: ${esc(prim.name)} &lt;${esc(prim.email)}&gt;${cc.length ? `<br>Cc: ${cc.map(x => esc(x.name)).join(', ')}` : ''}</div><input class="subj" id="m-subj" value="${esc(d.email_subject || '')}"><textarea id="m-body">${esc(d.email_body || '')}</textarea>`
+        : tab === 'teams' ? `<div class="addr">Teams chat with ${esc(prim.name)} (${esc(prim.teams)})</div><textarea id="m-body" style="min-height:140px">${esc(d.teams_message || '')}</textarea>`
+        : `<div class="addr">Text to ${esc(prim.name)}, ${esc(prim.mobile)}</div><textarea id="m-body" style="min-height:100px">${esc(d.text_message || '')}</textarea><div class="note" id="m-len">${(d.text_message || '').length} characters</div>`;
+      const key = {email: 'email_body', teams: 'teams_message', text: 'text_message'}[tab];
+      $('#m-body').oninput = e => { d[key] = e.target.value; if ($('#m-len')) $('#m-len').textContent = e.target.value.length + ' characters'; $('#amail').href = mailto(); };
+      if ($('#m-subj')) $('#m-subj').oninput = e => { d.email_subject = e.target.value; $('#amail').href = mailto(); };
+      $('#amail').href = mailto();
+    };
+    document.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => { tab = b.dataset.mt; pane(); }); pane();
+    $('#acopy').onclick = () => { const t = tab === 'email' ? `${d.email_subject}\n\n${d.email_body}` : tab === 'teams' ? d.teams_message : d.text_message;
+      try { navigator.clipboard.writeText(t); toast('Copied'); } catch (e) { toast('Copy failed; select the text instead'); } };
+    $('#aredo').onclick = () => openAlert(f, opts);
+    $('#aok').onclick = async () => {
+      const own = res.recipients[Number($('#a-owner').value)], due = $('#a-due').value;
+      $('#aok').disabled = true;
+      try {
+        const t = await post('api/alerts/tasks', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, rule_name: f.rule_name, severity: f.severity, owner: own, due_date: due,
+          recipients: res.recipients, drafts: d, checks: res.checks.concat(res.review ? [{name: 'Model review', ok: res.review.verdict === 'pass', detail: (res.review.issues || []).join('; ')}] : []), simulated: !!res.simulated});
+        await post('api/acks', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, until_date: due, owner: `${own.name} (${own.role})`, safety: !!F.isSafety(f),
+          note: `Alert approved; follow-up task ${t.task_id}`, snapshot: F.ackSnapshot(f, RULES.find(x => x.id === f.rule_id), r.fact)});
+        for (const x of siblings(r, f)) await post('api/acks', {engineer_id: ENG, well_id: x.well_id, rule_id: x.rule_id, until_date: due, owner: `${own.name} (${own.role})`, safety: !!F.isSafety(x),
+          note: `Covered by alert task ${t.task_id} (${f.rule_name})`, snapshot: F.ackSnapshot(x, RULES.find(y => y.id === x.rule_id), r.fact)});
+        $('#modal').hidden = true; await refresh(`Alert approved · task ${t.task_id} for ${own.name}`);
+      } catch (e) { $('#aok').disabled = false; toast('Could not save: ' + e.message); }
+    };
+  }
+  function viewTask(t) {
+    let d = {}, ck = [], rc = []; try { d = JSON.parse(t.drafts_json || '{}'); ck = JSON.parse(t.checks_json || '[]'); rc = JSON.parse(t.recipients_json || '[]'); } catch (e) {}
+    showModal(`<div class="mhead"><h2>Task ${esc(t.task_id)} · ${esc(t.well_id)} · ${esc(t.rule_name)}</h2><button class="btn sec close" id="mx">Close</button></div><div class="mbody">
+      <div class="note">Owner ${esc(t.owner_name)} (${esc(t.owner_role)}) · due ${esc(t.due_date)} · status ${esc(t.status)} · approved by ${esc(t.created_by)}</div>
+      <div class="alertgrid"><div><h3>Email</h3><div class="addr">To: ${rc.filter(x => x.primary).map(x => esc(x.name)).join(', ')}${rc.some(x => !x.primary) ? ' · Cc: ' + rc.filter(x => !x.primary).map(x => esc(x.name)).join(', ') : ''}</div>
+        <b>${esc(d.email_subject || '')}</b><pre style="white-space:pre-wrap;font:13px/19px var(--dk-font-body)">${esc(d.email_body || '')}</pre>
+        ${d.teams_message ? `<h3>Teams</h3><pre style="white-space:pre-wrap;font:13px/19px var(--dk-font-body)">${esc(d.teams_message)}</pre>` : ''}
+        ${d.text_message ? `<h3>Text</h3><pre style="white-space:pre-wrap;font:13px/19px var(--dk-font-body)">${esc(d.text_message)}</pre>` : ''}</div>
+        <div><h3>Checker at approval</h3>${checksHtml(ck, null, false)}</div></div></div>`);
   }
 
   // ---------------- Well report (a printable document per well) ----------------

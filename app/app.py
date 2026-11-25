@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 
 import agent
+import alerts
 
 S = os.getenv("WELL_SCHEMA", "workspace.well_ops")
 WAREHOUSE_ID = os.getenv("DATABRICKS_WAREHOUSE_ID")
@@ -91,6 +92,7 @@ def bundle():
                                     FROM {S}.app_well_attributes) WHERE rn = 1"""),
             "notes": query(f"""SELECT note_id, engineer_id, well_id, rule_id, body, pending_kind, pending_type, expected_by, created_by, created_at FROM (
                                 SELECT *, row_number() OVER (PARTITION BY note_id ORDER BY created_at DESC) rn FROM {S}.app_well_notes) WHERE rn = 1 AND NOT archived ORDER BY created_at DESC"""),
+            "alert_tasks": query(f"""SELECT * FROM (SELECT *, row_number() OVER (PARTITION BY task_id ORDER BY created_at DESC) rn FROM {S}.app_alert_tasks) WHERE rn = 1 ORDER BY created_at DESC"""),
             "freshness": cached("fresh", lambda: query(f"SELECT * FROM {S}.gold_source_freshness"), 600),
             "now": "2026-11-23T08:00:00",
             "test_catalog": cached("cat", lambda: query(f"SELECT * FROM {S}.silver_test_catalog ORDER BY test_group, test_type")),
@@ -345,11 +347,13 @@ def lineage(kind: str, well_id: str = "", date: str = "", bronze_id: str = "", m
 # ---------------- chat ----------------
 CONVS, LOCK = {}, threading.Lock()
 
-def llm(msgs, tools):
+def llm(msgs, tools, max_tokens=1200, reasoning=None, timeout=120, model=None):
     hdr = ws().config.authenticate(); hdr["Content-Type"] = "application/json"
+    payload = {"messages": msgs, "max_tokens": max_tokens, "temperature": 0.1}
+    if tools: payload["tools"] = tools
+    if reasoning: payload["reasoning_effort"] = reasoning
     for attempt in range(3):
-        r = requests.post(f"{ws().config.host}/serving-endpoints/{LLM_ENDPOINT}/invocations", headers=hdr, timeout=120,
-                          json={"messages": msgs, "tools": tools, "max_tokens": 1200, "temperature": 0.1})
+        r = requests.post(f"{ws().config.host}/serving-endpoints/{model or LLM_ENDPOINT}/invocations", headers=hdr, timeout=timeout, json=payload)
         if r.status_code == 429 or r.status_code >= 500:
             time.sleep(2 * (attempt + 1)); continue
         if r.status_code >= 400: raise HTTPException(502, f"Model endpoint error {r.status_code}: {r.text[:300]}")
@@ -384,3 +388,62 @@ def chat(body: dict):  # sync: FastAPI runs it in a worker thread, so a long mod
     for src in res.get("sources", []):
         if src["id"] in conv.evidence: ev[src["id"]] = conv.evidence[src["id"]]
     return {"conversation_id": conv.id, **res, "evidence": ev, "model": LLM_ENDPOINT}
+
+
+# ---------------- agent alerts (Greg + checker) ----------------
+@app.post("/api/alerts/draft")
+def alert_draft(body: dict):  # sync: several model calls
+    _well(body.get("well_id"))
+    flag = body.get("flag") or {}
+    if not isinstance(flag, dict) or not RULE_ID_RE.fullmatch(str(flag.get("rule_id") or "")): raise HTTPException(400, "bad flag")
+    try: return alerts.draft(query, S, llm, body)
+    except (ValueError, KeyError) as e: raise HTTPException(502, f"Greg couldn't draft this alert: {e}")
+
+
+@app.post("/api/alerts/tasks")
+async def alert_task(request: Request):
+    """Approve an alert: records the approved messages and creates the follow-up task. Nothing is sent from the app."""
+    b = await request.json()
+    eng, rule = b.get("engineer_id") or "", b.get("rule_id") or ""
+    if not ENG_RE.fullmatch(eng) or not RULE_ID_RE.fullmatch(rule): raise HTTPException(400, "bad engineer or rule id")
+    tid = "T-" + uuid.uuid4().hex[:8]
+    own = b.get("owner") or {}
+    query(f"""INSERT INTO {S}.app_alert_tasks VALUES (:t, :e, :w, :r, :rn, :sv, :on, :orl, :oe, cast(:d AS DATE), 'Open', :rc, :dr, :ck, cast(:sim AS BOOLEAN), NULL, :who, current_timestamp())""",
+          {"t": tid, "e": eng, "w": _well(b.get("well_id")), "r": rule, "rn": _txt(b.get("rule_name"), 120), "sv": _txt(b.get("severity"), 20), "on": _txt(own.get("name"), 80),
+           "orl": _txt(own.get("role"), 60), "oe": _txt(own.get("email"), 120), "d": _date(b.get("due_date")), "rc": json.dumps(b.get("recipients") or [])[:8000],
+           "dr": json.dumps(b.get("drafts") or {})[:12000], "ck": json.dumps(b.get("checks") or [])[:6000], "sim": str(bool(b.get("simulated"))).lower(), "who": _who(request)})
+    return {"ok": True, "task_id": tid}
+
+
+@app.post("/api/alerts/tasks/{task_id}/status")
+async def alert_task_status(task_id: str, request: Request):
+    if not re.fullmatch(r"T-[0-9a-f]{8}", task_id): raise HTTPException(400, "bad task id")
+    b = await request.json(); st = b.get("status")
+    if st not in ("Open", "Done", "Cancelled"): raise HTTPException(400, "status must be Open, Done or Cancelled")
+    rows = query(f"SELECT * FROM (SELECT *, row_number() OVER (PARTITION BY task_id ORDER BY created_at DESC) rn FROM {S}.app_alert_tasks WHERE task_id = :t) WHERE rn = 1", {"t": task_id})
+    if not rows: raise HTTPException(404, "no such task")
+    query(f"""INSERT INTO {S}.app_alert_tasks SELECT task_id, engineer_id, well_id, rule_id, rule_name, severity, owner_name, owner_role, owner_email, due_date, :st,
+              recipients_json, drafts_json, checks_json, simulated, :n, :who, current_timestamp() FROM (SELECT *, row_number() OVER (ORDER BY created_at DESC) rn
+              FROM {S}.app_alert_tasks WHERE task_id = :t) WHERE rn = 1""",
+          {"st": st, "n": _txt(b.get("note"), 500), "who": _who(request), "t": task_id})
+    return {"ok": True}
+
+
+@app.post("/api/alerts/reset_demo")
+async def alert_reset_demo(request: Request):
+    """Cancel follow-up tasks raised from simulated readings and clear their 'being handled' marks, so the demo can run again."""
+    b = await request.json(); eng = b.get("engineer_id") or ""
+    if not ENG_RE.fullmatch(eng): raise HTTPException(400, "bad engineer id")
+    open_demo = query(f"""SELECT task_id, well_id, rule_id FROM (SELECT *, row_number() OVER (PARTITION BY task_id ORDER BY created_at DESC) rn FROM {S}.app_alert_tasks)
+                          WHERE rn = 1 AND simulated AND status = 'Open' AND engineer_id = :e""", {"e": eng})
+    for t in open_demo:
+        query(f"""INSERT INTO {S}.app_alert_tasks SELECT task_id, engineer_id, well_id, rule_id, rule_name, severity, owner_name, owner_role, owner_email, due_date, 'Cancelled',
+                  recipients_json, drafts_json, checks_json, simulated, 'Demo reset', :who, current_timestamp() FROM (SELECT *, row_number() OVER (ORDER BY created_at DESC) rn
+                  FROM {S}.app_alert_tasks WHERE task_id = :t) WHERE rn = 1""", {"t": t["task_id"], "who": _who(request)})
+        query(f"""INSERT INTO {S}.app_flag_acks (engineer_id, well_id, rule_id, until_date, note, snapshot_json, cleared, acked_by, acked_at, owner)
+                  VALUES (:e, :w, :r, NULL, 'Demo reset', '{{}}', true, :who, current_timestamp(), NULL)""", {"e": eng, "w": t["well_id"], "r": t["rule_id"], "who": _who(request)})
+        for x in query(f"""SELECT rule_id FROM (SELECT *, row_number() OVER (PARTITION BY rule_id ORDER BY acked_at DESC) rn FROM {S}.app_flag_acks WHERE engineer_id = :e AND well_id = :w)
+                           WHERE rn = 1 AND NOT cleared AND note LIKE :n""", {"e": eng, "w": t["well_id"], "n": f"Covered by alert task {t['task_id']}%"}):
+            query(f"""INSERT INTO {S}.app_flag_acks (engineer_id, well_id, rule_id, until_date, note, snapshot_json, cleared, acked_by, acked_at, owner)
+                      VALUES (:e, :w, :r, NULL, 'Demo reset', '{{}}', true, :who, current_timestamp(), NULL)""", {"e": eng, "w": t["well_id"], "r": x["rule_id"], "who": _who(request)})
+    return {"ok": True, "cancelled": len(open_demo)}

@@ -15,7 +15,7 @@ dest = f"/Workspace/Users/{me}/apps/{APP}"
 
 # 1. upload source
 w.workspace.mkdirs(dest + "/static")
-for rel in ["app.py", "agent.py", "app.yaml", "requirements.txt", "static/index.html", "static/app.js", "static/flags.js"]:
+for rel in ["app.py", "agent.py", "alerts.py", "app.yaml", "requirements.txt", "static/index.html", "static/app.js", "static/flags.js"]:
     with open(os.path.join(HERE, rel), "rb") as f:
         w.workspace.upload(f"{dest}/{rel}", io.BytesIO(f.read()), format=ImportFormat.AUTO, overwrite=True)
 print("uploaded to", dest)
@@ -38,7 +38,7 @@ print("app", app.name, "sp", sp, "compute", app.compute_status.state if app.comp
 for g in [f"GRANT USE CATALOG ON CATALOG workspace TO `{sp}`",
           f"GRANT USE SCHEMA, SELECT ON SCHEMA {SCHEMA} TO `{sp}`",
           *[f"GRANT MODIFY ON TABLE {SCHEMA}.{t} TO `{sp}`" for t in ("app_flag_rules", "app_flag_settings", "app_custom_fields", "app_well_attributes",
-                                                                     "app_flag_acks", "app_fix_estimates", "app_well_notes")]]:
+                                                                     "app_flag_acks", "app_fix_estimates", "app_well_notes", "app_alert_tasks")]]:
     sql(w, g, WH)
 print("grants done")
 

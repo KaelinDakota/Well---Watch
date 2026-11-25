@@ -265,6 +265,27 @@ The **Preview** at the bottom shows which of your wells the rule would flag befo
 
 ---
 
+## Alerts (Greg)
+
+When a critical flag comes up, someone has to be told: the HSE advisor about gas at a wellsite, the integrity engineer about casing pressure, the field foreman about a down well. The **Alerts** tab does that triage for you.
+
+![Alerts tab](images/13_alerts_tab.png)
+
+**How it works**
+1. **Flag raised.** The Alerts tab lists every critical flag (and every safety warning) that has no open follow-up task yet. Related flags on the same well, like "H2S detected at surface" and "H2S alarms this week", go into one alert.
+2. **Who to notify.** The app looks up the routing rules (`gold_alert_routing`: which roles hear about which kind of flag, and why) and the contact directory (`gold_well_contacts`: who holds each role for the well's area). The model does not choose the people.
+3. **Greg drafts.** Greg, the alerting agent, writes an email, a Teams message and a text from the well's data: the reading against its limit, why it matters, the recommended next step, what is being asked of whom, the due date and a link to the well report.
+4. **The checker reviews.** A second agent, running on a different model, checks every draft before you see it. It confirms that every number is in the well's data, that quoted limits are the rule's real limits, that the well, severity, next step and due date are there, that only routed people are addressed, that nothing claims work was done, and that the text fits one SMS. If anything fails, Greg rewrites the draft once using the checker's notes.
+5. **You approve.** Edit anything, then **Approve and create follow-up task**. The task gets an owner (the first person routed) and a due date (1 day for Critical, 3 for Warning), and the flag is marked as being handled by that owner. If the reading gets worse, the flag comes back.
+
+![Greg's draft](images/14_greg_draft.png)
+
+**Nothing is sent from Well Watch.** Use **Open in email app** or **Copy this message** to send it from Outlook or Teams. Sending directly is the next step once the app is connected to company email and Teams.
+
+**Demo: simulate a pressure spike.** On the Alerts tab, pick a well and click **Simulate spike**. The app pretends a new SCADA reading put production casing at 94% of MAASP; the flag appears on every tab and Greg drafts the alert straight away (about 7 seconds). A banner shows while the simulation is on; the real data is never changed. **Reset demo** cancels tasks from simulated readings so you can run it again.
+
+**Follow-up tasks** are listed at the bottom of the tab. Open **messages** to see exactly what was approved and what the checker found, and **mark done** when the issue is resolved.
+
 ## Ask the data (the assistant)
 
 ![Assistant](images/09_chat.png)
