@@ -647,7 +647,7 @@
     const sub = {daily: `${p.well_id} on ${p.date}`, safety_daily: `${p.well_id} safety readings on ${p.date}`, snapshot: `${p.well_id} production snapshot`, safety_snapshot: `${p.well_id} safety snapshot`,
       economics: `${p.well_id} ${String(p.month).slice(0, 7)}`, test: `test record ${p.bronze_id}`, safety_event: `safety event ${p.bronze_id}`}[p.kind] || p.kind.replace('_', ' ');
     $('#mbox .mbody').innerHTML = focusBanner(fx) + `<div class="note" style="margin:4px 0 12px">${esc(sub)} · gold (what the app and the assistant read), then silver (cleaned), then bronze (as received), then the raw file</div>` +
-      d.steps.map(s => `<div class="step"><div><span class="layer ${s.layer}">${s.layer}</span> ${tableUrl(s.table) ? `<a class="small" href="${esc(tableUrl(s.table))}" target="_blank" rel="noopener"><code>${esc(s.table)}</code> ${ic('ext')}</a>` : s.layer === 'raw' ? `<a class="small" href="${esc(D.workspace_url + '/explore/data/volumes/workspace/well_ops/landing')}" target="_blank" rel="noopener"><code>/Volumes/workspace/well_ops/landing</code> ${ic('ext')}</a>` : `<code class="small">${esc(s.table)}</code>`}</div>
+      d.steps.map(s => `<div class="step"><div><span class="layer ${s.layer}">${s.layer}</span> ${tableUrl(s.table) ? `<a class="small" href="${esc(tableUrl(s.table))}" target="_blank" rel="noopener"><code>${esc(s.table)}</code> ${ic('ext')}</a>` : s.layer === 'raw' ? `<a class="small" href="${esc(D.workspace_url + '/explore/data/volumes/' + SCH().replace('.', '/') + '/landing')}" target="_blank" rel="noopener"><code>${esc(LANDING())}</code> ${ic('ext')}</a>` : `<code class="small">${esc(s.table)}</code>`}</div>
         ${s.note ? `<div class="note" style="margin:3px 0">${esc(s.note)}</div>` : ''}
         ${(s.rules || []).length ? `<div class="rulebox"><b>Cleaning rules applied:</b>${[...new Map(s.rules.map(r => [r.rule_id, r])).values()].map(r => `<div><code>${esc(r.rule_id)}</code> ${esc(r.description)}</div>`).join('')}</div>` : ''}
         ${s.files ? `<div class="rulebox">${s.files.map(f => `${ic('file', 'md')} ${esc(f)}`).join('<br>')}</div>` : ''}
@@ -907,7 +907,7 @@
       </div><div>
         <h3 style="margin-top:0">Who gets it</h3>
         ${res.recipients.map(x => `<div style="margin-bottom:8px;font-size:13px"><b>${esc(x.name)}</b> · ${esc(x.role)}${x.primary ? ' <span class="pill">owns the task</span>' : ''}<div class="muted small">${esc(x.why)} · ${x.channels.join(', ')}</div></div>`).join('')}
-        <div class="muted small">From the alert routing rules (<a class="lk" href="${esc(tableUrl('workspace.well_ops.gold_alert_routing'))}" target="_blank" rel="noopener">gold_alert_routing</a>) and the contact directory (<a class="lk" href="${esc(tableUrl('workspace.well_ops.gold_well_contacts'))}" target="_blank" rel="noopener">gold_well_contacts</a>), not chosen by the model.</div>
+        <div class="muted small">From the alert routing rules (<a class="lk" href="${esc(tableUrl(SCH() + '.gold_alert_routing'))}" target="_blank" rel="noopener">gold_alert_routing</a>) and the contact directory (<a class="lk" href="${esc(tableUrl(SCH() + '.gold_well_contacts'))}" target="_blank" rel="noopener">gold_well_contacts</a>), not chosen by the model.</div>
         <h3>What the agents did</h3>
         <ul class="agentsteps">${res.steps.map(s => `<li><span class="who">${esc(s.agent)}</span><span>${esc(s.action)}${s.secs !== undefined ? ` <span class="muted small">· ${esc(s.model || '')}, ${s.secs} s</span>` : ''}${(s.issues || []).length ? `<div class="iss">${s.issues.map(esc).join('<br>')}</div>` : ''}</span></li>`).join('')}</ul>
         <h3>Checker</h3>${checksHtml(res.checks, res.review, res.revised)}
@@ -1041,8 +1041,8 @@
       <section><h2>Notes (${notes.length})</h2>${notes.length ? notes.map(n => noteHtml(n, false)).join('') : '<div class="muted">None.</div>'}</section>
       <section class="two"><div><h2>Open work orders (${wos.length})</h2>${wos.length ? `<table><tbody>${wos.map(o => `<tr><td>${esc(o.wo_number)}</td><td>${esc(o.wo_type)}: ${esc(o.description)}</td><td>${esc(o.status)}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">None.</div>'}</div>
         <div><h2>Downtime, last 30 days (${down30.length})</h2>${down30.length ? `<table><tbody>${down30.map(e => `<tr><td>${esc(e.event_date)}</td><td>${esc(e.category)}</td><td class="n">${e.is_open ? '<span class="pill crit">open</span>' : fmt(e.hours_lost, 1) + ' h'}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">None.</div>'}</div></section>
-      <section><h2>Sources</h2><div class="note">Every number in this report comes from these tables in Databricks (schema workspace.well_ops). Open a table to see all of its rows.</div>
-        <ul class="rsrc">${tbls.map(t => `<li><a href="${esc(tableUrl('workspace.well_ops.' + t))}" target="_blank" rel="noopener"><code>${t}</code> ${ic('ext')}</a> <span class="muted">${esc(tdesc[t])}</span></li>`).join('')}</ul>
+      <section><h2>Sources</h2><div class="note">Every number in this report comes from these tables in Databricks (schema ${esc(SCH())}). Open a table to see all of its rows.</div>
+        <ul class="rsrc">${tbls.map(t => `<li><a href="${esc(tableUrl(SCH() + '.' + t))}" target="_blank" rel="noopener"><code>${t}</code> ${ic('ext')}</a> <span class="muted">${esc(tdesc[t])}</span></li>`).join('')}</ul>
         ${ctx && ctx.evidence && Object.keys(ctx.evidence).length ? `<div class="note">The answer above cites ${Object.keys(ctx.evidence).map(k => `<span class="cite" data-ev="${k}">${k}</span>`).join(' ')}; click one to see its query and rows.</div>` : ''}</section>
       <footer class="muted small">Well Watch · synthetic data, not a real well · this report flags issues for review and does not make safety decisions; follow your company's procedures.</footer></article>`;
     $('#rprint').onclick = () => window.print();
@@ -1107,6 +1107,8 @@
     return out;
   }
   // Every answer ends with the sources the app actually queried (built by the app, not written by the model).
+  const SCH = () => (D && D.schema) || 'workspace.well_ops';
+  const LANDING = () => '/Volumes/' + SCH().replace('.', '/') + '/landing';
   const tableUrl = t => /^[\w]+\.[\w]+\.[\w]+$/.test(t) ? `${D.workspace_url}/explore/data/${t.split('.').join('/')}` : null;
   function sourcesHtml(res) {
     const src = res.sources || [];

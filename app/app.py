@@ -1,11 +1,11 @@
 """Well Watch - Databricks App.
 
-Sits on top of the workspace.well_ops medallion (bronze -> silver -> gold). Serves:
+Sits on top of the medallion in WELL_SCHEMA (workspace.well_ops on Free Edition, dataloader_v2_dogfood.well_watch at Dakota) (bronze -> silver -> gold). Serves:
   * the snapshot of every well plus each engineer's saved flag rules (ranking runs in the browser, deterministic)
   * well detail (daily history, downtime, economics, work orders)
   * our own chat agent (agent.py) on a Databricks-hosted foundation model, whose every fact is an evidence record
   * lineage: any gold row traced back to the silver row, the bronze rows and the raw file it came from
-Never reads the answer-key schema (workspace.well_eval)."""
+Never reads the answer-key schema (well_eval)."""
 import json, os, re, threading, time, uuid
 from functools import lru_cache
 
@@ -97,7 +97,7 @@ def bundle():
             "now": "2026-11-23T08:00:00",
             "test_catalog": cached("cat", lambda: query(f"SELECT * FROM {S}.silver_test_catalog ORDER BY test_group, test_type")),
             "cleaning_rules": cached("clean", lambda: query(f"SELECT rule_id, description FROM {S}.silver_cleaning_rules ORDER BY rule_id")),
-            "model": LLM_ENDPOINT, "workspace_url": ws().config.host.rstrip("/")}
+            "model": LLM_ENDPOINT, "workspace_url": ws().config.host.rstrip("/"), "schema": S}
 
 
 @app.get("/api/well/{well_id}")

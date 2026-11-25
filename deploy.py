@@ -1,45 +1,68 @@
 """Deploy the Well Watch Databricks App with the Python SDK (no CLI needed).
-Usage: python deploy.py   (expects dbx.client() to return an authenticated WorkspaceClient)"""
-import io, os, sys
+Usage: python deploy.py [free|dakota]   (default: dakota)
+  free   -> personal Free Edition workspace, schema workspace.well_ops
+  dakota -> Dakota's Azure workspace, schema dataloader_v2_dogfood.well_watch
+Each target's client() comes from dbx.py / dbx_dakota.py (OAuth session, not in this repo)."""
+import importlib, io, os, sys
 sys.path.insert(0, os.path.expanduser("~/"))
 sys.path.insert(0, "/home/claude")
-from dbx import client, sql
+from dbx import sql
 from databricks.sdk.service import apps as A
 from databricks.sdk.service.workspace import ImportFormat
 
-APP, WH, EP, SCHEMA = "well-watch", "e7e26c8b767a5be9", "databricks-gpt-oss-120b", "workspace.well_ops"
+TARGETS = {
+    "free": {"module": "dbx", "warehouse": "e7e26c8b767a5be9", "schema": "workspace.well_ops"},
+    "dakota": {"module": "dbx_dakota", "warehouse": "b9c4909fd7b5f266", "schema": "dataloader_v2_dogfood.well_watch"},
+}
+TARGET = sys.argv[1] if len(sys.argv) > 1 else "dakota"
+T = TARGETS[TARGET]
+APP, EP, ALERT_EP = "well-watch", "databricks-gpt-oss-120b", "databricks-qwen3-next-80b-a3b-instruct"
+WH, SCHEMA = T["warehouse"], T["schema"]
 HERE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app")
-w = client()
+w = importlib.import_module(T["module"]).client()
 me = w.current_user.me().user_name
 dest = f"/Workspace/Users/{me}/apps/{APP}"
+print("target", TARGET, w.config.host, "as", me)
 
-# 1. upload source
+# 1. upload source; app.yaml gets this target's schema
 w.workspace.mkdirs(dest + "/static")
 for rel in ["app.py", "agent.py", "alerts.py", "app.yaml", "requirements.txt", "static/index.html", "static/app.js", "static/flags.js"]:
     with open(os.path.join(HERE, rel), "rb") as f:
-        w.workspace.upload(f"{dest}/{rel}", io.BytesIO(f.read()), format=ImportFormat.AUTO, overwrite=True)
+        data = f.read()
+    if rel == "app.yaml":
+        data = data.replace(b"value: workspace.well_ops", f"value: {SCHEMA}".encode())
+    w.workspace.upload(f"{dest}/{rel}", io.BytesIO(data), format=ImportFormat.AUTO, overwrite=True)
 print("uploaded to", dest)
 
-# 2. create the app with its resources (warehouse + model endpoint), or update them
+# 2. create the app with its resources (warehouse + model endpoints), or update them
 resources = [
     A.AppResource(name="sql-warehouse", sql_warehouse=A.AppResourceSqlWarehouse(id=WH, permission=A.AppResourceSqlWarehouseSqlWarehousePermission.CAN_USE)),
     A.AppResource(name="llm-endpoint", serving_endpoint=A.AppResourceServingEndpoint(name=EP, permission=A.AppResourceServingEndpointServingEndpointPermission.CAN_QUERY)),
+    A.AppResource(name="alert-model", serving_endpoint=A.AppResourceServingEndpoint(name=ALERT_EP, permission=A.AppResourceServingEndpointServingEndpointPermission.CAN_QUERY)),
 ]
-existing = {a.name for a in w.apps.list()}
-if APP not in existing:
-    app = w.apps.create_and_wait(app=A.App(name=APP, description="Well Watch: daily ranked well list with safety-first flag rules, safety log and a grounded data assistant", resources=resources))
+desc = "Well Watch: daily ranked well list for production engineers, safety tracking, a grounded data assistant and agent-drafted alerts. Synthetic data."
+if APP not in {a.name for a in w.apps.list()}:
+    w.apps.create_and_wait(app=A.App(name=APP, description=desc, resources=resources))
 else:
-    app = w.apps.update(name=APP, app=A.App(name=APP, description="Well Watch: daily ranked well list with safety-first flag rules, safety log and a grounded data assistant", resources=resources))
+    w.apps.update(name=APP, app=A.App(name=APP, description=desc, resources=resources))
 app = w.apps.get(APP)
 sp = app.service_principal_client_id
 print("app", app.name, "sp", sp, "compute", app.compute_status.state if app.compute_status else None)
 
 # 3. Unity Catalog grants for the app's service principal (read the medallion, write only the app_* tables engineers change; nothing on well_eval)
-for g in [f"GRANT USE CATALOG ON CATALOG workspace TO `{sp}`",
+catalog = SCHEMA.split(".")[0]
+for g in [f"GRANT USE CATALOG ON CATALOG {catalog} TO `{sp}`",
           f"GRANT USE SCHEMA, SELECT ON SCHEMA {SCHEMA} TO `{sp}`",
+          f"GRANT READ VOLUME ON VOLUME {SCHEMA}.landing TO `{sp}`",
           *[f"GRANT MODIFY ON TABLE {SCHEMA}.{t} TO `{sp}`" for t in ("app_flag_rules", "app_flag_settings", "app_custom_fields", "app_well_attributes",
                                                                      "app_flag_acks", "app_fix_estimates", "app_well_notes", "app_alert_tasks")]]:
-    sql(w, g, WH)
+    try:
+        sql(w, g, WH)
+    except RuntimeError as e:
+        if "USE CATALOG" in g and "MANAGE" in str(e):
+            print(f"PENDING: the catalog owner must run:  {g}")
+        else:
+            raise
 print("grants done")
 
 # 4. start compute if needed, then deploy
