@@ -7,7 +7,17 @@
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
   const clone = o => JSON.parse(JSON.stringify(o));
-  const fmt = (v, d = 0) => v === null || v === undefined || v === '' || isNaN(Number(v)) ? '–' : Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
+  const fmt = (v, d = 0) => v === null || v === undefined || v === '' || isNaN(Number(v)) ? '' : Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
+  // Lucide line icons (the Dakota design system's icon set), drawn inline so they take currentColor.
+  const ICONS = {check: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M18 6 6 18M6 6l12 12"/>', alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>', note: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>', arrow: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+    down: '<path d="m6 9 6 6 6-6"/>', up: '<path d="m18 15-6-6-6 6"/>', ext: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3"/>',
+    shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-14.93 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+    moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>', undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'};
+  const ic = (n, cls = 'sm') => `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
+  const SAFETY_TAG = `<span class="shield">${'<svg class="ico sm" viewBox="0 0 24 24" aria-hidden="true">'}${'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'}</svg>Safety</span>`;
   const store = {get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }};
   const api = async (path, opts) => { const r = await fetch(path, opts); if (!r.ok) throw new Error((await r.text()).slice(0, 300) || r.statusText); return r.json(); };
   const post = (path, body, method = 'POST') => api(path, {method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
@@ -35,8 +45,15 @@
       w.notes_count = ns.length; w.pending_reports = ns.filter(n => n.state.s === 'waiting').length; w.unconfirmed_reports = ns.filter(n => n.state.s === 'overdue').length; }
   }
   async function init() {
-    try { await loadBundle(); } catch (e) { $('#main').innerHTML = `<div class="empty">Could not load data: ${esc(e.message)}</div>`; return; }
-    $('#asof').textContent = D.as_of;
+    setTheme(document.documentElement.dataset.theme || 'light');
+    $('#themebtn').onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+    try { await loadBundle(); } catch (e) {
+      $('#main').innerHTML = `<div class="errcard"><b>The well data didn't load.</b><div>The app couldn't reach the Databricks SQL warehouse. It may be starting up; try again in a minute.</div>
+        <div style="display:flex;gap:8px"><button class="btn" id="retry">Retry</button><button class="btn sec" id="copyerr">Copy error details</button></div></div>`;
+      $('#retry').onclick = () => location.reload();
+      $('#copyerr').onclick = () => { try { navigator.clipboard.writeText(String(e.message)); toast('Error details copied'); } catch (x) {} };
+      return;
+    }
     $('#chatmodel').textContent = 'model: ' + D.model.replace('databricks-', '');
     $('#eng').innerHTML = D.engineers.map(e => `<option value="${e.engineer_id}">${esc(e.engineer_name)}</option>`).join('');
     ENG = store.get('ww-eng') || D.engineers[0].engineer_id; $('#eng').value = ENG;
@@ -87,7 +104,7 @@
       return Object.assign({}, f, {stale: age > Number(f.stale_after_hours), age}); });
     const short = {'SCADA production': 'Production', 'SCADA safety readings': 'Safety readings', 'Maintenance / integrity system': 'Tests', 'HSE incident system': 'Incidents', 'Field downtime log': 'Downtime', 'Accounting': 'Costs'};
     const md = d => { const x = new Date(String(d).slice(0, 10) + 'T00:00:00Z'); return x.toLocaleDateString('en-US', {month: 'short', day: 'numeric', timeZone: 'UTC'}); };
-    $('#fresh').innerHTML = `<span class="muted">Data:</span> ${rows.map(f => `<span class="fr ${f.stale ? 'stale' : ''}" title="${esc(f.source)}: ${esc(f.provides)}. Data through ${esc(String(f.data_through).slice(0, 10))}; last received ${esc(String(f.last_received).slice(0, 16).replace('T', ' '))}.">${f.stale ? '⚠' : '●'} ${esc(short[f.source] || f.source)} ${/Maintenance|HSE/.test(f.source) ? 'updated ' + md(f.last_received) : 'through ' + md(f.data_through)}</span>`).join('')}
+    $('#fresh').innerHTML = `<span class="muted">Data:</span> ${rows.map(f => `<span class="fr ${f.stale ? 'stale' : ''}" title="${esc(f.source)}: ${esc(f.provides)}. Data through ${esc(String(f.data_through).slice(0, 10))}; last received ${esc(String(f.last_received).slice(0, 16).replace('T', ' '))}.">${f.stale ? ic('alert') : ic('check')} ${esc(short[f.source] || f.source)} ${/Maintenance|HSE/.test(f.source) ? 'updated ' + md(f.last_received) : 'through ' + md(f.data_through)}</span>`).join('')}
       <a class="lk" id="freshmore">details</a>`;
     $('#freshmore').onclick = () => showModal(`<div class="mhead"><h2>Where the data comes from</h2><button class="btn sec close" id="mx">Close</button></div><div class="mbody">
       <div class="note">Each source system sends its data on a schedule. A source turns amber when its last delivery is older than expected, so numbers from it may be out of date.</div>
@@ -95,8 +112,16 @@
         <td>${esc(String(f.data_through).slice(0, 10))}</td><td>${esc(String(f.last_received).slice(0, 16).replace('T', ' '))}</td>
         <td>${f.stale ? `<span class="pill warn">late (${fmt(f.age, 0)} h old, expected within ${fmt(f.stale_after_hours)} h)</span>` : '<span class="pill ok">on time</span>'}</td></tr>`).join('')}</tbody></table></div>`);
   }
+  function setTheme(t) {
+    document.documentElement.dataset.theme = t; store.set('ww-theme', t);
+    $('#themebtn').innerHTML = ic(t === 'dark' ? 'sun' : 'moon', '');
+    $('#themebtn').title = t === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+  }
   function render() {
     renderFreshness();
+    const titles = {day: 'My day', wells: 'My wells', safety: 'Safety', rules: 'Flag rules'};
+    $('#ptitle').textContent = titles[view];
+    $('#pmeta').innerHTML = `${esc(engName() || '')}<span class="sep" style="opacity:.5;padding:0 6px">·</span>${myWells().length} wells<span class="sep" style="opacity:.5;padding:0 6px">·</span>Data through ${esc(D.as_of)}`;
     document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
     const ids = myIds();
     $('#c-day').textContent = Math.min(10, ACTIVE().length); $('#c-wells').textContent = ids.size; $('#c-rules').textContent = RULES.filter(r => r.enabled).length;
@@ -121,7 +146,7 @@
   }
   const noteBadge = n => ({note: '', waiting: `<span class="pill warn">waiting for the ${esc(n.pending_type)} record · expected by ${esc(String(n.expected_by).slice(0, 10))}</span>`,
     overdue: `<span class="pill crit">not in the ${n.pending_kind === 'test' ? 'maintenance' : 'HSE'} system yet · was expected by ${esc(String(n.expected_by).slice(0, 10))}</span>`,
-    confirmed: `<span class="pill ok">✓ confirmed by the official record</span>`})[n.state.s];
+    confirmed: `<span class="pill ok">${ic('check')} Confirmed by the official record</span>`})[n.state.s];
   const noteHtml = (n, withArchive) => `<div class="noteitem"><div>${esc(n.body)}</div>
     <div class="muted small">${esc(n.created_by || '')} · ${esc(String(n.created_at).slice(0, 16).replace('T', ' '))}${n.rule_id ? ` · on "${esc((RULES.find(r => r.id === n.rule_id) || {}).name || n.rule_id)}"` : ''} ${noteBadge(n)}
       ${n.state.rec ? `<a class="lk" ${lin(itemLin(n.state.rec))}>see record</a>` : ''}${withArchive ? ` · <a class="lk" data-arch="${n.note_id}">archive</a>` : ''}</div></div>`;
@@ -149,9 +174,9 @@
   // Test status: red only when something is wrong. "Safety-critical" is a neutral label about the test's importance, not its result.
   const SC_LABEL = '<span class="sclabel" title="A test that must not be missed or failed. Says nothing about the result.">Safety-critical</span>';
   const testState = t => ['Fail', 'Serious'].includes(t.last_result) ? 0 : t.overdue ? 1 : t.days_until_due <= 30 ? 2 : t.last_result === 'Non-serious' ? 3 : 4;
-  const testStatus = t => ({0: `<span class="pill crit">✗ ${t.last_result === 'Serious' ? 'Serious result' : 'Failed'}</span>`, 1: `<span class="pill crit">${t.days_overdue} d overdue</span>`,
-    2: `<span class="pill warn">Due in ${t.days_until_due} d</span>`, 3: '<span class="pill warn">OK · monitor</span>', 4: '<span class="pill ok">✓ OK</span>'})[testState(t)];
-  const TEST_LEGEND = '<div class="note" style="margin:-4px 0 6px"><span class="sclabel">Safety-critical</span> means the test must not be missed or failed. It says nothing about the result. The Status column shows how the well is doing: <span class="pill ok">✓ OK</span> <span class="pill warn">due soon</span> <span class="pill crit">overdue or failed</span></div>';
+  const testStatus = t => ({0: `<span class="pill crit">${ic('x')} ${t.last_result === 'Serious' ? 'Serious result' : 'Failed'}</span>`, 1: `<span class="pill crit">${ic('x')} ${t.days_overdue} d overdue</span>`,
+    2: `<span class="pill warn">Due in ${t.days_until_due} d</span>`, 3: '<span class="pill warn">OK, monitor</span>', 4: `<span class="pill ok">${ic('check')} OK</span>`})[testState(t)];
+  const TEST_LEGEND = `<div class="note" style="margin:-4px 0 8px"><span class="sclabel" style="margin-left:0">Safety-critical</span> means the test must not be missed or failed. It says nothing about the result. The Status column shows how the well is doing: <span class="pill ok">${ic('check')} OK</span> <span class="pill warn">Due soon</span> <span class="pill crit">${ic('x')} Overdue or failed</span></div>`;
 
   // ---------------- "Look here first": what to highlight when tracing a flagged well ----------------
   // A rule condition is on a snapshot/test/event field; the same quantity appears under other column names in the daily
@@ -209,7 +234,7 @@
   function focusBanner(fx) {
     if (!fx) return '';
     return `<div class="lookfirst"><b>Look at these first</b> · why ${esc(fx.well)} is flagged
-      ${fx.notes.map(f => `<div style="margin-top:4px"><span class="sev ${f.severity}" style="display:inline-block;margin-right:6px">${f.severity}</span>${f.safety ? '<span class="shield">SAFETY</span>' : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}${f.handled ? ' <span class="muted">(being handled)</span>' : ''}</div>`).join('')}
+      ${fx.notes.map(f => `<div style="margin-top:4px"><span class="sev ${f.severity}" style="display:inline-block;margin-right:6px">${f.severity}</span>${f.safety ? SAFETY_TAG : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}${f.handled ? ' <span class="muted">(being handled)</span>' : ''}</div>`).join('')}
       <div class="small" style="margin-top:6px"><span class="fhit" style="padding:0 5px">red</span> = this value crossed the rule's threshold · <span class="fcol" style="padding:0 5px">shaded</span> = the columns behind the flag. Highlighted fields are listed first.</div></div>`;
   }
 
@@ -222,20 +247,20 @@
     const head = {safety: ['Safety', 'Deal with these first, most severe first.'], production: ['Production and cost', `Ranked by ${SORT_LABEL()}.`], watch: ['Watch list', 'Review-level items, by points.']};
     let last = null;
     $('#main').innerHTML = `<div class="kpis six">
-        <div class="kpi"><div class="n">${mine.length}</div><div class="l">wells assigned to ${esc(engName())}</div></div>
-        <div class="kpi crit"><div class="n">${saf}</div><div class="l">wells with a safety issue</div></div>
-        <div class="kpi warn"><div class="n">${prod.length}</div><div class="l">wells losing production or money</div></div>
-        <div class="kpi"><div class="n">$${fmt(var_)}</div><div class="l">per day at risk on those wells</div></div>
-        <div class="kpi"><div class="n">${handled.length}</div><div class="l">marked as being handled</div></div>
-        <div class="kpi"><div class="n">${fmt(oil)}</div><div class="l">bbl/d oil, last 7 days (type curve ${fmt(tgt)})</div></div></div>
+        <div class="kpi"><div class="n">${mine.length}</div><div class="l">Wells assigned to ${esc(engName())}</div></div>
+        <div class="kpi crit"><div class="n">${saf}</div><div class="l">Wells with a safety issue</div></div>
+        <div class="kpi warn"><div class="n">${prod.length}</div><div class="l">Wells losing production or money</div></div>
+        <div class="kpi"><div class="n">$${fmt(var_)}</div><div class="l">At risk per day on those wells</div></div>
+        <div class="kpi"><div class="n">${handled.length}</div><div class="l">Marked as being handled</div></div>
+        <div class="kpi"><div class="n">${fmt(oil)}</div><div class="l">Oil, last 7 days, bbl/d (type curve ${fmt(tgt)})</div></div></div>
       <div class="bar"><b style="font-size:16px">${showAll ? 'Everything that needs attention' : 'Top 10 to look at today'}</b>
         <span class="note">${SAFETY_FIRST ? 'Safety first, then production and cost by ' + SORT_LABEL() : 'Ranked by ' + SORT_LABEL()}, then the watch list · related rules count once · <a class="lk" id="torules">change rules</a></span>
         ${act.length > 10 ? `<button class="btn sec small" id="more" style="margin-left:auto">${showAll ? 'Show top 10' : `Show all ${act.length}`}</button>` : ''}</div>
-      <div class="card">${list.length ? list.map((r, i) => { const t = r.tier !== last ? `<div class="tier">${head[r.tier][0]} <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)">· ${head[r.tier][1]}</span></div>` : ''; last = r.tier; return t + wellCard(r, i + 1); }).join('')
+      <div class="card">${list.length ? list.map((r, i) => { const t = r.tier !== last ? `<div class="tier">${head[r.tier][0]} <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--dk-on-surface-muted)">· ${head[r.tier][1]}</span></div>` : ''; last = r.tier; return t + wellCard(r, i + 1); }).join('')
         : '<div class="empty">Nothing needs attention under your current rules.</div>'}</div>
       ${!showAll && act.length > 10 ? `<div class="note" style="margin-top:8px">${act.length - 10} more below the top 10: ${act.slice(10).map(r => `<a class="lk" data-well="${r.well_id}">${r.well_id}</a>`).join(', ')}</div>` : ''}
       ${handled.length ? `<h3>Being handled (${handled.length}) <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· off the list until the date passes, or sooner if the problem gets worse</span></h3>
-        <div class="card">${handled.map(r => `<div class="wcard"><div class="rk">–</div><div><div class="t"><a data-well="${r.well_id}">${r.well_id} · ${esc(r.fact.well_name)}</a></div></div><div></div>${r.flags.map(flagHtml).join('')}</div>`).join('')}</div>` : ''}`;
+        <div class="card">${handled.map(r => `<div class="wcard"><div class="rk"></div><div><div class="t"><a data-well="${r.well_id}">${r.well_id} · ${esc(r.fact.well_name)}</a></div></div><div></div>${r.flags.map(flagHtml).join('')}</div>`).join('')}</div>` : ''}`;
     $('#torules').onclick = () => go('rules');
     if ($('#more')) $('#more').onclick = () => { showAll = !showAll; render(); };
     bindCommon($('#main')); bindFlagActions($('#main'));
@@ -251,10 +276,10 @@
     const acts = (h ? (h.type === 'ack' ? `<a class="lk" data-unack='${key}'>no longer being handled</a>` : '')
       : `<a class="lk" data-ack='${key}'>mark as being handled</a>${!f.safety ? ` · <a class="lk" data-est='${key}'>${EST[f.well_id + '|' + f.rule_id] !== undefined ? 'change' : 'add'} fix cost estimate</a>` : ''}`) + ` · <a class="lk" data-note='${key}'>add note</a>`;
     const fnotes = D.notes.filter(n => n.well_id === f.well_id && n.rule_id === f.rule_id);
-    return `<div class="flag" style="${h ? 'opacity:.6' : ''}"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? '<span class="shield">SAFETY</span>' : ''}${f.resurfaced ? '<span class="shield" style="background:#c9822b">BACK</span>' : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}</div>
-      ${f.resurfaced ? `<div class="act" style="color:#8a5a10">Back on the list: ${esc(f.resurfaced)}.</div>` : ''}
+    return `<div class="flag" style="${h ? 'opacity:.6' : ''}"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? SAFETY_TAG : ''}${f.resurfaced ? `<span class="shield back">${ic('undo')}Back on the list</span>` : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}</div>
+      ${f.resurfaced ? `<div class="act" style="color:var(--dk-status-amber)">Back on the list: ${esc(f.resurfaced)}.</div>` : ''}
       ${h ? `<div class="act"><b>Being handled</b>${h.type === 'ack' ? `${h.owner ? ` by <b>${esc(h.owner)}</b>` : ''} · follow up by ${esc(String(h.until).slice(0, 10))} <span class="muted">(marked by ${esc(h.by || '')})</span>` : ' (open work order)'}${h.note ? ` · ${esc(h.note)}` : ''}</div>` : ''}
-      ${fnotes.length ? `<div class="act">${fnotes.map(n => `📝 ${esc(n.body)} <span class="muted">— ${esc(n.created_by || '')}</span> ${noteBadge(n)}`).join('<br>')}</div>` : ''}
+      ${fnotes.length ? `<div class="act">${fnotes.map(n => `${ic('note')} ${esc(n.body)} <span class="muted">· ${esc(n.created_by || '')}</span> ${noteBadge(n)}`).join('<br>')}</div>` : ''}
       <div class="chips">${chips}</div>${f.action && !h ? `<div class="act">Next step: ${esc(f.action)}</div>` : ''}
       <div class="act small">${meta.join(' · ')}${meta.length ? ' · ' : ''}${acts}</div></div>`;
   }
@@ -263,14 +288,14 @@
     const side = r.tier === 'production'
       ? `<div class="score">$${fmt(r.value)}/day</div><div class="val">${r.value_parts.operating_loss ? `$${fmt(r.value_parts.lost_oil)} lost oil + $${fmt(r.value_parts.operating_loss)} operating loss` : 'lost oil vs type curve'}</div>
          <div class="val">${r.fix_cost ? `fix ≈ $${fmt(r.fix_cost)}${r.payback_days ? ` · pays back in ~${fmt(r.payback_days)} days` : ''}` : 'no fix cost estimate'}</div><div class="val">${r.score} pts</div>`
-      : r.tier === 'safety' ? `<div class="score" style="color:var(--crit)">${r.safety_worst}</div><div class="val">${r.safety_score} safety pts · ${r.score} total</div>`
+      : r.tier === 'safety' ? `<div class="score" style="color:var(--dk-status-bad)">${r.safety_worst}</div><div class="val">${r.safety_score} safety pts · ${r.score} total</div>`
       : `<div class="score">${r.score} pts</div>`;
     return `<div class="wcard"><div class="rk">${n}</div>
       <div><div class="t"><a data-well="${w.well_id}">${w.well_id} · ${esc(w.well_name)}</a></div>
         <div class="meta">${esc(w.reservoir)} · ${esc(w.lift_type)} · ${esc(w.area)} · ${esc(w.sour_class || '')} · ${fmt(w.oil_7d_bopd, 1)} bbl/d vs ${fmt(w.target_7d_bopd, 1)} type curve${Number(w.open_work_orders) > 0 ? ` · open work order: ${esc(w.open_work_order)}` : ''}</div></div>
       <div class="side">${side}</div>
       ${r.flags.map(flagHtml).join('')}
-      ${(() => { const gen = D.notes.filter(n => n.well_id === w.well_id && !n.rule_id); return gen.length ? `<div class="flag"><span></span><div class="act">📝 ${esc(gen[0].body)} <span class="muted">— ${esc(gen[0].created_by || '')}</span>${gen.length > 1 ? ` <span class="muted">(+${gen.length - 1} more note${gen.length > 2 ? 's' : ''})</span>` : ''}</div></div>` : ''; })()}
+      ${(() => { const gen = D.notes.filter(n => n.well_id === w.well_id && !n.rule_id); return gen.length ? `<div class="flag"><span></span><div class="act">${ic('note')} ${esc(gen[0].body)} <span class="muted">· ${esc(gen[0].created_by || '')}</span>${gen.length > 1 ? ` <span class="muted">(+${gen.length - 1} more note${gen.length > 2 ? 's' : ''})</span>` : ''}</div></div>` : ''; })()}
       <div class="wactions"><button class="btn sec small" data-well="${w.well_id}">Open well</button><button class="btn sec small" data-ask="${w.well_id}">Ask why</button>
         <button class="btn sec small" data-trace-snap="${w.well_id}" data-cat="${esc(r.flags[0].category)}">Trace these numbers</button></div></div>`;
   }
@@ -309,7 +334,7 @@
   // ---------------- My wells ----------------
   function renderWells() {
     const act = ACTIVE();
-    const sc = Object.fromEntries(RANK.map(r => [r.well_id, {score: r.score, rank: act.indexOf(r) + 1 || '–', worst: r.worst, n: r.flags.length, safety: r.safety_worst, tier: r.tier}]));
+    const sc = Object.fromEntries(RANK.map(r => [r.well_id, {score: r.score, rank: act.indexOf(r) + 1 || '', worst: r.worst, n: r.flags.length, safety: r.safety_worst, tier: r.tier}]));
     const cols = [['well_id', 'Well'], ['score', 'Score', 1], ['perf_ratio_7d', 'vs type curve', 1], ['oil_7d_bopd', 'Oil bbl/d', 1], ['water_cut_7d_pct', 'Water cut %', 1],
       ['casing_pct_of_maasp', 'Casing % MAASP', 1], ['sc_psi_max_7d', 'Surf. csg psi', 1], ['h2s_ambient_max_7d_ppm', 'H2S ppm', 1], ['tests_overdue', 'Tests overdue', 1],
       ['open_safety_events', 'Open events', 1], ['uptime_14d_pct', 'Uptime %', 1], ['value_at_risk_cad_day', 'At risk $/d', 1]];
@@ -317,13 +342,13 @@
     if (wellFilter) { const q = wellFilter.toLowerCase(); rows = rows.filter(w => [w.well_id, w.well_name, w.reservoir, w.lift_type, w.area, w.sour_class].join(' ').toLowerCase().includes(q)); }
     rows.sort((a, b) => { const x = a[wellSort.k], y = b[wellSort.k]; return (x === y ? 0 : x === null ? 1 : y === null ? -1 : x > y ? 1 : -1) * wellSort.dir; });
     $('#main').innerHTML = `<div class="bar"><input id="wf" placeholder="Filter by well, reservoir, lift, area, sour class" value="${esc(wellFilter)}" style="width:320px"><span class="note">${rows.length} wells · click a column to sort · click a well to open it</span></div>
-      <div class="card" style="overflow:auto"><table><thead><tr>${cols.map(([k, l, n]) => `<th class="s ${n ? 'n' : ''}" data-k="${k}">${l}${wellSort.k === k ? (wellSort.dir < 0 ? ' ▾' : ' ▴') : ''}</th>`).join('')}<th>Flags</th></tr></thead>
+      <div class="card" style="overflow:auto"><table><thead><tr>${cols.map(([k, l, n]) => `<th class="s ${n ? 'n' : ''}" data-k="${k}">${l}${wellSort.k === k ? (wellSort.dir < 0 ? ' ' + ic('down') : ' ' + ic('up')) : ''}</th>`).join('')}<th>Flags</th></tr></thead>
       <tbody>${rows.map(w => `<tr class="click" data-well="${w.well_id}"><td><b>${w.well_id}</b> ${esc(w.well_name)}<div class="muted small">${esc(w.reservoir)} · ${esc(w.lift_type)} · ${esc(w.sour_class)}</div></td>
         <td class="n">${w._f ? `<b>${w.score}</b> <span class="muted small">#${w._f.rank}</span>` : '<span class="muted">0</span>'}</td>
         <td class="n">${fmt(w.perf_ratio_7d, 2)}×</td><td class="n">${fmt(w.oil_7d_bopd, 1)}</td><td class="n">${fmt(w.water_cut_7d_pct, 1)}</td>
         <td class="n">${fmt(w.casing_pct_of_maasp, 0)}%</td><td class="n">${fmt(w.sc_psi_max_7d, 0)}</td><td class="n">${fmt(w.h2s_ambient_max_7d_ppm)}</td><td class="n">${fmt(w.tests_overdue)}</td>
         <td class="n">${fmt(w.open_safety_events)}</td><td class="n">${fmt(w.uptime_14d_pct, 1)}</td><td class="n">${fmt(w.value_at_risk_cad_day)}</td>
-        <td>${w._f && w._f.tier === 'handled' ? '<span class="pill">being handled</span>' : w._f ? `${w._f.safety && w._f.safety !== 'Review' ? '<span class="shield">SAFETY</span>' : ''}<span class="pill ${w._f.worst === 'Critical' ? 'crit' : w._f.worst === 'Warning' ? 'warn' : 'rev'}">${w._f.n} flag${w._f.n > 1 ? 's' : ''}</span>` : '<span class="pill ok">OK</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+        <td>${w._f && w._f.tier === 'handled' ? '<span class="pill">being handled</span>' : w._f ? `${w._f.safety && w._f.safety !== 'Review' ? SAFETY_TAG : ''}<span class="pill ${w._f.worst === 'Critical' ? 'crit' : w._f.worst === 'Warning' ? 'warn' : 'rev'}">${w._f.n} flag${w._f.n > 1 ? 's' : ''}</span>` : '<span class="pill ok">OK</span>'}</td></tr>`).join('')}</tbody></table></div>`;
     $('#wf').oninput = e => { wellFilter = e.target.value; const pos = e.target.selectionStart; renderWells(); $('#wf').focus(); $('#wf').setSelectionRange(pos, pos); };
     document.querySelectorAll('th.s').forEach(th => th.onclick = () => { const k = th.dataset.k; wellSort = {k, dir: wellSort.k === k ? -wellSort.dir : (k === 'well_id' ? 1 : -1)}; renderWells(); });
     bindCommon($('#main'));
@@ -344,19 +369,19 @@
       <td>${esc(String(t.last_test_date).slice(0, 10))} · ${esc(t.last_result)}</td><td>${testStatus(t)}</td>
       <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(t))}>trace</a></td></tr>`;
     const evRow = e => `<tr><td>${esc(String(e.event_date).slice(0, 10))}</td><td><a class="lk" data-well="${e.well_id}">${e.well_id}</a></td><td><b>${esc(e.category)}</b><div class="muted small">${esc(e.description || '')}</div></td>
-      <td>${e.reportable ? (e.reported_to_regulator ? '<span class="pill ok">reported</span>' : '<span class="pill crit">NOT reported</span>') : '<span class="muted small">not reportable</span>'}</td>
+      <td>${e.reportable ? (e.reported_to_regulator ? `<span class="pill ok">${ic('check')} Reported</span>` : `<span class="pill crit">${ic('x')} Not reported</span>`) : '<span class="muted small">Not reportable</span>'}</td>
       <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(e))}>trace</a></td></tr>`;
     const tblT = (head, rows, empty) => rows.length ? TEST_LEGEND.replace('margin:-4px 0 6px', 'margin:6px 12px') + tbl(head, rows, empty) : tbl(head, rows, empty);
     const tbl = (head, rows, empty) => rows.length ? `<div class="tw" style="max-height:320px;border:0"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : `<div class="muted small" style="padding:10px 12px">${empty}</div>`;
     $('#main').innerHTML = `<div class="bar"><span class="note" style="max-width:900px">Tests come from the <b>maintenance / integrity system</b> and incidents from the <b>HSE incident system</b>, recorded by field and safety staff. This tab is read-only: to correct a record, fix it in that system. To add context, write a <b>note</b> on the well; for a value the systems don't carry, add a <b>custom field</b>.</span>
         <button class="btn sec" id="bfields" style="margin-left:auto">Custom fields (${D.custom_fields.length})</button></div>
       <div class="kpis six">
-        <div class="kpi crit"><div class="n">${safeWells.filter(r => r.safety_worst === 'Critical').length}</div><div class="l">wells with a critical safety flag</div></div>
-        <div class="kpi crit"><div class="n">${overdue.filter(t => t.safety_critical).length}</div><div class="l">safety-critical tests overdue</div></div>
-        <div class="kpi warn"><div class="n">${overdue.length}</div><div class="l">tests / inspections overdue</div></div>
-        <div class="kpi"><div class="n">${soon.length}</div><div class="l">due in the next 30 days</div></div>
-        <div class="kpi crit"><div class="n">${open.length}</div><div class="l">open safety events</div></div>
-        <div class="kpi crit"><div class="n">${events.filter(e => e.reportable && !e.reported_to_regulator).length}</div><div class="l">reportable, not yet reported</div></div></div>
+        <div class="kpi crit"><div class="n">${safeWells.filter(r => r.safety_worst === 'Critical').length}</div><div class="l">Wells with a critical safety flag</div></div>
+        <div class="kpi crit"><div class="n">${overdue.filter(t => t.safety_critical).length}</div><div class="l">Safety-critical tests overdue</div></div>
+        <div class="kpi warn"><div class="n">${overdue.length}</div><div class="l">Tests and inspections overdue</div></div>
+        <div class="kpi"><div class="n">${soon.length}</div><div class="l">Due in the next 30 days</div></div>
+        <div class="kpi crit"><div class="n">${open.length}</div><div class="l">Open safety events</div></div>
+        <div class="kpi crit"><div class="n">${events.filter(e => e.reportable && !e.reported_to_regulator).length}</div><div class="l">Reportable, not yet reported</div></div></div>
       <div class="secgrid">
         <div class="card"><h4>Wells with safety flags <span class="muted small">${safeWells.length}</span></h4>
           ${tbl(['Well', 'Safety flags'], safeWells.map(r => `<tr><td><a class="lk" data-well="${r.well_id}">${r.well_id}</a><div class="muted small">${esc(r.fact.well_name)}</div></td>
@@ -396,7 +421,7 @@
   function fillField(key) {
     const c = D.custom_fields.find(x => x.field_key === key), wells = myWells();
     const input = (w) => { const v = (D.attrs[w.well_id] || {})[key] ?? '';
-      return c.field_type === 'yesno' ? `<select data-w="${w.well_id}"><option value="" ${v === '' ? 'selected' : ''}>–</option><option value="true" ${v === 'true' ? 'selected' : ''}>Yes</option><option value="false" ${v === 'false' ? 'selected' : ''}>No</option></select>`
+      return c.field_type === 'yesno' ? `<select data-w="${w.well_id}"><option value="" ${v === '' ? 'selected' : ''}>Not set</option><option value="true" ${v === 'true' ? 'selected' : ''}>Yes</option><option value="false" ${v === 'false' ? 'selected' : ''}>No</option></select>`
         : `<input data-w="${w.well_id}" ${c.field_type === 'date' ? 'type="date"' : ''} value="${esc(v)}">`; };
     formModal(`${c.label}: values for ${engName()}'s wells`, `<div class="tw" style="max-height:60vh"><table><tbody>${wells.map(w => `<tr><td>${w.well_id} <span class="muted small">${esc(w.well_name)}</span></td><td>${input(w)}</td></tr>`).join('')}</tbody></table></div>`, async () => {
       const changed = [...document.querySelectorAll('#mbox [data-w]')].filter(el => el.value !== ((D.attrs[el.dataset.w] || {})[key] ?? ''));
@@ -431,9 +456,9 @@
       'Oil, last 7 d': ['perf_ratio_7d', 'oil_7d_bopd'], 'vs type curve': ['perf_ratio_7d'], 'Water cut': ['water_cut_change_pts', 'water_cut_7d_pct'], 'GOR': ['gor_change_pct', 'gor_7d'],
       'Casing': ['casing_psi_change', 'casing_psi_7d'], 'Uptime 14 d': ['consecutive_down_days', 'downtime_events_14d', 'uptime_14d_pct'], 'Margin (Oct)': ['margin_per_boe'], 'At risk': ['value_at_risk_cad_day', 'perf_ratio_7d', 'consecutive_down_days']};
     const boxAlert = l => (BOXF[l] || []).some(f => alertF.has(f));
-    const boxHtml = (l, v, size) => `<div class="kpi ${boxAlert(l) ? 'kpi-alert' : ''}"><div class="n" style="font-size:${size}px">${esc(v)}</div><div class="l">${l}${boxAlert(l) ? ' <b class="flagtxt">⚑ why it\'s flagged</b>' : ''}</div></div>`;
+    const boxHtml = (l, v, size) => `<div class="kpi ${boxAlert(l) ? 'kpi-alert' : ''}"><div class="n" style="font-size:${size}px">${esc(v)}</div><div class="l">${l}${boxAlert(l) ? ` <b class="flagtxt">${ic('flag')} why it's flagged</b>` : ''}</div></div>`;
     const sk = [['Casing vs MAASP', `${fmt(w.casing_psi_max_7d)} / ${fmt(w.prod_casing_maasp_psi)} psi (${fmt(w.casing_pct_of_maasp, 0)}%)`], ['Surface casing', `${fmt(w.sc_psi_max_7d, 0)} / ${fmt(w.surface_casing_limit_psi)} psi (${fmt(w.sc_pct_of_limit, 0)}%)`],
-      ['Flowline vs MAOP', `${fmt(w.flowline_psi_max_7d, 0)} / ${fmt(w.flowline_maop_psi)} psi (${fmt(w.flowline_pct_of_maop, 0)}%)`], ['Vent flow test', `${w.scvf_status || '–'}${w.scvf_rate_m3d ? ' · ' + fmt(w.scvf_rate_m3d) + ' m3/d' : ''}`],
+      ['Flowline vs MAOP', `${fmt(w.flowline_psi_max_7d, 0)} / ${fmt(w.flowline_maop_psi)} psi (${fmt(w.flowline_pct_of_maop, 0)}%)`], ['Vent flow test', `${w.scvf_status || 'None'}${w.scvf_rate_m3d ? ' · ' + fmt(w.scvf_rate_m3d) + ' m3/d' : ''}`],
       ['H2S', `${fmt(w.h2s_ppm_gas)} ppm in gas · ${fmt(w.h2s_ambient_max_7d_ppm)} ppm at surface`], ['EPZ', w.epz_m ? `${fmt(w.epz_m)} m · ${fmt(w.residences_in_epz)} residence${Number(w.residences_in_epz) === 1 ? '' : 's'}` : 'none (sweet)'],
       ['Venting this month', `${fmt(w.vent_mtd_m3)} / ${fmt(w.vent_limit_m3_month)} m3 (${fmt(w.vent_pct_of_limit, 0)}%)`], ['Tests', `${fmt(w.tests_overdue)} overdue · ${fmt(w.tests_due_30d)} due ≤30 d · ${fmt(w.failed_tests)} failed`]];
     const sd = d.safety_daily, prod = d.daily.map(x => ({date: x.prod_date, y: x.reported ? x.oil_bbl : null, y2: x.target_oil_bopd}));
@@ -451,7 +476,7 @@
       ${myNotes.length ? myNotes.map(n => noteHtml(n, true)).join('') : '<div class="muted small">No notes. Add context the systems don\'t have: what the field told you, what is booked, what you are waiting for.</div>'}
       <h3>Flags today ${r ? (r.tier === 'handled' ? '· all being handled' : `· ${r.tier} · rank #${ACTIVE().indexOf(r) + 1} · ${r.score} pts${r.tier === 'production' ? ` · $${fmt(r.value)}/day` : ''}`) : ''}</h3>
       ${r ? `<div style="display:grid;grid-template-columns:44px 1fr auto">${r.flags.map(flagHtml).join('')}</div>` : '<div class="muted">No flags from your rules.</div>'}
-      <h3>Safety <a class="lk small" ${lin({kind: 'safety_snapshot', well_id: id})} style="text-transform:none;letter-spacing:0;margin-left:6px">trace →</a></h3>
+      <h3>Safety <a class="lk small" ${lin({kind: 'safety_snapshot', well_id: id})} style="text-transform:none;letter-spacing:0;margin-left:6px">Trace these numbers</a></h3>
       <div class="kpis" style="grid-template-columns:repeat(4,1fr)">${sk.map(([l, v]) => boxHtml(l, v, 14)).join('')}</div>
       <div class="charts">
         ${charts([
@@ -469,11 +494,11 @@
       <h3>Safety events (${myEvents.length}) <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· from the HSE incident system</span></h3>
       ${myEvents.length ? `<div class="tw" style="max-height:240px"><table><thead><tr><th>Date</th><th>Category (AI)</th><th>As typed</th><th>Status</th><th>Regulator</th><th></th></tr></thead><tbody>
         ${myEvents.map(e => `<tr><td>${esc(String(e.event_date).slice(0, 10))}</td><td>${esc(e.category)}${e.planned ? ' <span class="muted small">(planned)</span>' : ''}</td><td class="muted">${esc(e.event_type_original)}: ${esc(e.description || '')}</td>
-          <td>${e.status === 'Closed' ? 'Closed' : '<span class="pill crit">Open</span>'}</td><td>${e.reportable ? (e.reported_to_regulator ? 'reported' : '<b style="color:var(--crit)">not reported</b>') : '–'}</td>
+          <td>${e.status === 'Closed' ? 'Closed' : `<span class="pill crit">${ic('x')} Open</span>`}</td><td>${e.reportable ? (e.reported_to_regulator ? 'Reported' : `<span class="pill crit">${ic('x')} Not reported</span>`) : ''}</td>
           <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(e))}>trace</a></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">None.</div>'}
       ${D.custom_fields.length ? `<h3>Custom fields <a class="lk" id="dcf" style="text-transform:none;letter-spacing:0;margin-left:6px">edit</a></h3><div class="kpis" style="grid-template-columns:repeat(4,1fr)">
         ${D.custom_fields.map(c => `<div class="kpi"><div class="n" style="font-size:14px">${esc(F.fmtVal('x_' + c.field_key, w['x_' + c.field_key]))}</div><div class="l">${esc(c.label)}</div></div>`).join('')}</div>` : ''}
-      <h3>Production snapshot as of ${D.as_of} <a class="lk small" ${lin({kind: 'snapshot', well_id: id})} style="text-transform:none;letter-spacing:0;margin-left:6px">trace →</a></h3>
+      <h3>Production snapshot as of ${D.as_of} <a class="lk small" ${lin({kind: 'snapshot', well_id: id})} style="text-transform:none;letter-spacing:0;margin-left:6px">Trace these numbers</a></h3>
       <div class="kpis" style="grid-template-columns:repeat(4,1fr)">${kp.map(([l, v]) => boxHtml(l, v, 16)).join('')}</div>
       <h3>Daily data since Aug 1 <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· click any point to trace it back to the raw file</span></h3>
       <div class="charts">
@@ -528,16 +553,16 @@
       } else if (f.items) {
         detail = f.items.slice(0, 5).map(it => `<li><a class="lk" ${lin(itemLin(it))}>${esc(F.DATASETS[f.dataset].describe(it))}</a></li>`).join('') + (f.items.length > 5 ? `<li class="muted">+${f.items.length - 5} more</li>` : '');
       }
-      return `<div style="margin-top:6px"><span class="sev ${f.severity}" style="display:inline-block;margin-right:6px">${f.severity}</span>${f.safety ? '<span class="shield">SAFETY</span>' : ''}<b>${esc(f.rule_name)}</b><ul style="margin:3px 0 0 18px;padding:0">${detail}</ul></div>`;
+      return `<div style="margin-top:6px"><span class="sev ${f.severity}" style="display:inline-block;margin-right:6px">${f.severity}</span>${f.safety ? SAFETY_TAG : ''}<b>${esc(f.rule_name)}</b><ul style="margin:3px 0 0 18px;padding:0">${detail}</ul></div>`;
     }).join('');
     return `<div class="whybox"><div style="display:flex;align-items:center;gap:8px"><b style="font-size:15px">Why this well is flagged</b>
-        <a class="lk small" ${lin({kind: r.flags.some(f => f.safety && !f.handled) ? 'safety_snapshot' : 'snapshot', well_id: id})}>show the readings behind this →</a></div>${items}
+        <a class="lk small" ${lin({kind: r.flags.some(f => f.safety && !f.handled) ? 'safety_snapshot' : 'snapshot', well_id: id})}>Show the readings behind this</a></div>${items}
       ${okBoxes.length ? `<div class="note" style="margin-top:8px">Not part of the problem: ${esc(okBoxes.join(', '))} ${okBoxes.length > 1 ? 'are' : 'is'} within limits.</div>` : ''}
-      <div class="note">The ⚑ boxes and charts below are the ones behind these flags.</div></div>`;
+      <div class="note" style="margin-top:6px">Boxes and charts marked "why it's flagged" below are the ones behind these flags.</div></div>`;
   }
   function editWellFields(id) {
     formModal(`Custom fields for ${id}`, `<div class="frm">${D.custom_fields.map(c => { const v = (D.attrs[id] || {})[c.field_key] ?? '';
-      return `<div><label>${esc(c.label)}</label>${c.field_type === 'yesno' ? `<select data-k="${c.field_key}"><option value="">–</option><option value="true" ${v === 'true' ? 'selected' : ''}>Yes</option><option value="false" ${v === 'false' ? 'selected' : ''}>No</option></select>`
+      return `<div><label>${esc(c.label)}</label>${c.field_type === 'yesno' ? `<select data-k="${c.field_key}"><option value="">Not set</option><option value="true" ${v === 'true' ? 'selected' : ''}>Yes</option><option value="false" ${v === 'false' ? 'selected' : ''}>No</option></select>`
         : `<input data-k="${c.field_key}" ${c.field_type === 'date' ? 'type="date"' : ''} value="${esc(v)}">`}<div class="note">${esc(c.help || '')}</div></div>`; }).join('')}</div>`, async () => {
       const values = {}; document.querySelectorAll('#mbox [data-k]').forEach(el => { if (el.value !== ((D.attrs[id] || {})[el.dataset.k] ?? '')) values[el.dataset.k] = el.value; });
       for (const [k, v] of Object.entries(values)) { const c = D.custom_fields.find(x => x.field_key === k); if (c.field_type === 'number' && v !== '' && isNaN(Number(v))) throw new Error(`${c.label}: not a number`); }
@@ -556,17 +581,17 @@
     let lo = Math.min(...ys), hi = Math.max(...ys); if (lo === hi) { lo -= 1; hi += 1; } const pad = (hi - lo) * 0.08; lo = Math.max(lo - pad, Math.min(...ys) >= 0 ? 0 : lo - pad); hi += pad;
     const x = i => L + (W - L - R) * i / Math.max(1, pts.length - 1), y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
     const path = k => { let s = '', pen = false; pts.forEach((p, i) => { const v = p[k]; if (v === null || v === undefined) { pen = false; return; } s += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); pen = true; }); return s; };
-    const ticks = [lo, (lo + hi) / 2, hi].map(v => `<text x="${L - 4}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="#5d6b78">${fmt(v, hi - lo < 5 ? 1 : 0)}</text><line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#eef1f3"/>`).join('');
-    const months = pts.map((p, i) => [String(p.date), i]).filter(([d]) => d.slice(8, 10) === '01').map(([d, i]) => `<text x="${x(i)}" y="${H - 6}" font-size="9" fill="#5d6b78" text-anchor="middle">${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+d.slice(5, 7) - 1]}</text>`).join('');
+    const ticks = [lo, (lo + hi) / 2, hi].map(v => `<text x="${L - 4}" y="${y(v) + 3}" text-anchor="end" font-size="9" >${fmt(v, hi - lo < 5 ? 1 : 0)}</text><line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--dk-ghost-border)"/>`).join('');
+    const months = pts.map((p, i) => [String(p.date), i]).filter(([d]) => d.slice(8, 10) === '01').map(([d, i]) => `<text x="${x(i)}" y="${H - 6}" font-size="9" text-anchor="middle">${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+d.slice(5, 7) - 1]}</text>`).join('');
     const limit = o.l2 && ['MAASP', 'Limit', 'MAOP'].includes(o.l2);
-    const t = o.thresh, tc = t && t.on ? '#c2412d' : '#9aa6b1';
-    const tLine = t ? `<line x1="${L}" x2="${W - R}" y1="${y(t.v)}" y2="${y(t.v)}" stroke="${tc}" stroke-width="1.2" stroke-dasharray="2 2"/><text x="${W - R - 2}" y="${y(t.v) - 3}" text-anchor="end" font-size="9" fill="${tc}">${esc(t.label)}</text>` : '';
-    const dots = t && t.on ? pts.map((p, i) => p.y !== null && p.y !== undefined && p.y >= t.v ? `<circle cx="${x(i).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="2.6" fill="#c2412d"/>` : '').join('') : '';
-    return `<div class="chart ${o.alert ? 'chart-alert' : ''}"><div class="ct">${title}${o.alert ? ' <b class="flagtxt">⚑ why it\'s flagged</b>' : ''}</div>${o.l1 ? `<div class="lg"><span style="color:#2f6fb3">━</span> ${o.l1} &nbsp; <span style="color:${limit ? '#c2412d' : '#b38a12'}">┅</span> ${o.l2}</div>` : ''}
+    const t = o.thresh, tc = t && t.on ? 'var(--dk-viz-bad)' : 'var(--dk-viz-neutral)';
+    const tLine = t ? `<line x1="${L}" x2="${W - R}" y1="${y(t.v)}" y2="${y(t.v)}" style="stroke:${tc}" stroke-width="1.2" stroke-dasharray="2 2"/><text x="${W - R - 2}" y="${y(t.v) - 3}" text-anchor="end" font-size="9" style="fill:${tc}">${esc(t.label)}</text>` : '';
+    const dots = t && t.on ? pts.map((p, i) => p.y !== null && p.y !== undefined && p.y >= t.v ? `<circle cx="${x(i).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="2.6" style="fill:var(--dk-viz-bad)"/>` : '').join('') : '';
+    return `<div class="chart ${o.alert ? 'chart-alert' : ''}"><div class="ct">${title}${o.alert ? ` <b class="flagtxt">${ic('flag')} why it's flagged</b>` : ''}</div>${o.l1 ? `<div class="lg"><svg width="16" height="8" aria-hidden="true"><line x1="0" y1="4" x2="16" y2="4" style="stroke:var(--dk-viz-brand)" stroke-width="2"/></svg> ${o.l1} &nbsp; <svg width="16" height="8" aria-hidden="true"><line x1="0" y1="4" x2="16" y2="4" style="stroke:${limit ? 'var(--dk-viz-bad)' : 'var(--dk-viz-compare)'}" stroke-width="1.5" stroke-dasharray="4 3"/></svg> ${o.l2}</div>` : ''}
       <svg viewBox="0 0 ${W} ${H}" data-chart="${key}" data-l="${L}" data-r="${R}" data-w="${W}">${ticks}${months}
-        ${pts.some(p => p.y2 !== undefined) ? `<path d="${path('y2')}" fill="none" stroke="${limit ? '#c2412d' : '#b38a12'}" stroke-width="1.5" stroke-dasharray="4 3"/>` : ''}
-        ${tLine}<path d="${path('y')}" fill="none" stroke="#2f6fb3" stroke-width="1.6"/>${dots}
-        <line class="hair" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="#9aa6b1" visibility="hidden"/>
+        ${pts.some(p => p.y2 !== undefined) ? `<path d="${path('y2')}" fill="none" style="stroke:${limit ? 'var(--dk-viz-bad)' : 'var(--dk-viz-compare)'}" stroke-width="1.5" stroke-dasharray="4 3"/>` : ''}
+        ${tLine}<path d="${path('y')}" fill="none" style="stroke:var(--dk-viz-brand)" stroke-width="1.8"/>${dots}
+        <line class="hair" x1="0" x2="0" y1="${T}" y2="${H - B}" style="stroke:var(--dk-outline)" visibility="hidden"/>
         <rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" style="cursor:pointer"/></svg></div>`;
   }
   function bindCharts(id) {
@@ -590,11 +615,11 @@
     const fx = buildFocus(p.well_id || p.focus_well || DRAWER_WELL, ['test', 'safety_event'].includes(p.kind) ? p.bronze_id : null);
     const sub = {daily: `${p.well_id} on ${p.date}`, safety_daily: `${p.well_id} safety readings on ${p.date}`, snapshot: `${p.well_id} production snapshot`, safety_snapshot: `${p.well_id} safety snapshot`,
       economics: `${p.well_id} ${String(p.month).slice(0, 7)}`, test: `test record ${p.bronze_id}`, safety_event: `safety event ${p.bronze_id}`}[p.kind] || p.kind.replace('_', ' ');
-    $('#mbox .mbody').innerHTML = focusBanner(fx) + `<div class="note" style="margin:4px 0 12px">${esc(sub)} · gold (what the app and the assistant read) → silver (cleaned) → bronze (as received) → raw file</div>` +
-      d.steps.map(s => `<div class="step"><div><span class="layer ${s.layer}">${s.layer}</span> ${tableUrl(s.table) ? `<a class="small" href="${esc(tableUrl(s.table))}" target="_blank" rel="noopener"><code>${esc(s.table)}</code> ↗</a>` : s.layer === 'raw' ? `<a class="small" href="${esc(D.workspace_url + '/explore/data/volumes/workspace/well_ops/landing')}" target="_blank" rel="noopener"><code>/Volumes/workspace/well_ops/landing</code> ↗</a>` : `<code class="small">${esc(s.table)}</code>`}</div>
+    $('#mbox .mbody').innerHTML = focusBanner(fx) + `<div class="note" style="margin:4px 0 12px">${esc(sub)} · gold (what the app and the assistant read), then silver (cleaned), then bronze (as received), then the raw file</div>` +
+      d.steps.map(s => `<div class="step"><div><span class="layer ${s.layer}">${s.layer}</span> ${tableUrl(s.table) ? `<a class="small" href="${esc(tableUrl(s.table))}" target="_blank" rel="noopener"><code>${esc(s.table)}</code> ${ic('ext')}</a>` : s.layer === 'raw' ? `<a class="small" href="${esc(D.workspace_url + '/explore/data/volumes/workspace/well_ops/landing')}" target="_blank" rel="noopener"><code>/Volumes/workspace/well_ops/landing</code> ${ic('ext')}</a>` : `<code class="small">${esc(s.table)}</code>`}</div>
         ${s.note ? `<div class="note" style="margin:3px 0">${esc(s.note)}</div>` : ''}
         ${(s.rules || []).length ? `<div class="rulebox"><b>Cleaning rules applied:</b>${[...new Map(s.rules.map(r => [r.rule_id, r])).values()].map(r => `<div><code>${esc(r.rule_id)}</code> ${esc(r.description)}</div>`).join('')}</div>` : ''}
-        ${s.files ? `<div class="rulebox">${s.files.map(f => `📄 ${esc(f)}`).join('<br>')}</div>` : ''}
+        ${s.files ? `<div class="rulebox">${s.files.map(f => `${ic('file', 'md')} ${esc(f)}`).join('<br>')}</div>` : ''}
         ${s.rows ? rowsTable(s.rows, {focus: fx, traceFn: s.trace_daily ? r => ({kind: 'daily', well_id: p.well_id, date: String(r.prod_date).slice(0, 10)}) : s.trace_safety ? r => ({kind: 'safety_daily', well_id: p.well_id, date: String(r.reading_date).slice(0, 10)}) : null}) : ''}</div>`).join('');
     document.querySelectorAll('#mbox [data-lin]').forEach(a => a.onclick = () => lineage(JSON.parse(a.dataset.lin)));
   }
@@ -608,7 +633,7 @@
     if (rows.length === 1 && cols.length > 8 && !o.traceFn) {
       const r0 = rows[0];
       if (fx) cols = cols.slice().sort((a, b) => (hitCell(fc(b), r0[b]) - hitCell(fc(a), r0[a])) || (!!fc(b) - !!fc(a)));
-      return `<div class="tw" style="max-height:300px"><table><tbody>${cols.map(c => `<tr><th style="position:static" class="${fc(c) ? 'fcol' : ''}">${esc(c)}</th><td class="${cls(c, r0[c])}">${cell(r0[c])}${hitCell(fc(c), r0[c]) ? ' ⚑' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+      return `<div class="tw" style="max-height:300px"><table><tbody>${cols.map(c => `<tr><th style="position:static" class="${fc(c) ? 'fcol' : ''}">${esc(c)}</th><td class="${cls(c, r0[c])}">${cell(r0[c])}${hitCell(fc(c), r0[c]) ? ' ' + ic('flag') : ''}</td></tr>`).join('')}</tbody></table></div>`;
     }
     if (fx) {  // flagged columns move next to the identifying columns so they're visible without scrolling
       const key = c => /^(well_id|uwi_alias|prod_date|reading_date|event_date|event_ts|test_date|month|test_id|event_id|record_id|entry_id|test_type|category)$/i.test(c);
@@ -617,10 +642,10 @@
     const shown = rows.slice(0, 120);
     const rowHit = r => isItem(r) || cols.some(c => hitCell(fc(c), r[c]));
     const nHit = fx ? shown.filter(rowHit).length : 0;
-    return `${nHit ? `<div class="small" style="color:#8a1c0f;margin:4px 0">⚑ ${nHit} of ${shown.length} row${shown.length === 1 ? '' : 's'} crossed a flag threshold or belong to the flag (marked below).</div>` : ''}
+    return `${nHit ? `<div class="small" style="color:var(--dk-status-bad);margin:6px 0">${ic('flag')} ${nHit} of ${shown.length} row${shown.length === 1 ? '' : 's'} crossed a flag threshold or belong to the flag (marked below).</div>` : ''}
       <div class="tw"><table><thead><tr>${o.traceFn ? '<th></th>' : ''}${cols.map(c => `<th class="${fc(c) ? 'fcol' : ''}">${esc(c)}</th>`).join('')}</tr></thead><tbody>
       ${shown.map(r => { const t = o.traceFn ? o.traceFn(r) : null, h = fx && rowHit(r);
-        return `<tr class="${r._used_in_silver ? 'used' : ''} ${h ? 'frow' : ''}">${o.traceFn ? `<td>${h ? '⚑ ' : ''}${t ? `<a class="lk" ${lin(t)}>trace</a>` : ''}</td>` : ''}${cols.map(c => `<td class="${cls(c, r[c])}">${cell(r[c])}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
+        return `<tr class="${r._used_in_silver ? 'used' : ''} ${h ? 'frow' : ''}">${o.traceFn ? `<td>${h ? ic('flag') + ' ' : ''}${t ? `<a class="lk" ${lin(t)}>trace</a>` : ''}</td>` : ''}${cols.map(c => `<td class="${cls(c, r[c])}">${cell(r[c])}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
       ${rows.length > 120 ? `<div class="muted small">first 120 of ${rows.length} rows</div>` : ''}`;
   }
   function showModal(html) { $('#mbox').innerHTML = html; $('#modal').hidden = false; $('#mx').onclick = () => $('#modal').hidden = true; }
@@ -644,7 +669,7 @@
       <div class="bar"><div class="filt">${cats.map(c => `<button data-cat="${esc(c)}" class="${ruleFilter === c ? 'on' : ''}">${esc(c)} ${c === 'All' ? RULES.length : RULES.filter(r => (r.category || 'Other') === c).length}</button>`).join('')}</div></div>
       <div class="card">${shown.map(([r, i]) => { const ds = r.dataset || 'well'; return `<div class="rule ${r.enabled ? '' : 'off'}">
         <button class="switch ${r.enabled ? 'on' : ''}" data-i="${i}" title="${r.enabled ? 'Turn off' : 'Turn on'}"></button>
-        <div><div><span class="sev ${esc(r.severity)}" style="display:inline-block;margin-right:8px">${esc(r.severity)}</span>${F.isSafety(r) ? '<span class="shield">SAFETY</span>' : ''}<b>${esc(r.name)}</b> <span class="muted small">${esc(r.category || '')}</span><span class="ds">${esc(F.DATASETS[ds].label)}</span></div>
+        <div><div><span class="sev ${esc(r.severity)}" style="display:inline-block;margin-right:8px">${esc(r.severity)}</span>${F.isSafety(r) ? SAFETY_TAG : ''}<b>${esc(r.name)}</b> <span class="muted small">${esc(r.category || '')}</span><span class="ds">${esc(F.DATASETS[ds].label)}</span></div>
           <div class="cond" style="margin-top:4px">${ds === 'well' ? 'When' : `When at least <b>${r.min_count || 1}</b> ${ds === 'test' ? 'test(s)' : 'event(s)'} have`} ${r.match === 'any' ? '<b>any</b>' : '<b>all</b>'} of: ${r.conditions.map(cn => condText(cn, ds)).join(' · ')}</div>
           <div class="muted small" style="margin-top:2px">Flags ${counts[r.id] || 0} of your wells now${r.group ? ` · group: ${esc(r.group)} (counted once)` : ''}${r.fix_cost ? ` · typical fix ≈ $${fmt(r.fix_cost)}` : ''}</div></div>
         <div style="display:flex;gap:10px;align-items:start"><div class="wt">${r.weight}<small>points</small></div><button class="btn sec small" data-edit="${i}">Edit</button><button class="btn sec small" data-dup="${i}">Copy</button></div></div>`; }).join('')}</div>`;
@@ -663,7 +688,7 @@
     const draw = () => {
       showModal(`<div class="mhead"><h2>Rule library</h2><button class="btn sec close" id="mx">Close</button></div><div class="mbody">
         <div class="note">Starter rules. Add any you removed, or copy one as the starting point for your own.</div>
-        <table><tbody>${F.DEFAULT_RULES.map(d => { const inUse = RULES.some(r => r.id === d.id); return `<tr><td>${F.isSafety(d) ? '<span class="shield">SAFETY</span>' : ''}<b>${esc(d.name)}</b><span class="ds">${esc(F.DATASETS[d.dataset || 'well'].label)}</span>
+        <table><tbody>${F.DEFAULT_RULES.map(d => { const inUse = RULES.some(r => r.id === d.id); return `<tr><td>${F.isSafety(d) ? SAFETY_TAG : ''}<b>${esc(d.name)}</b><span class="ds">${esc(F.DATASETS[d.dataset || 'well'].label)}</span>
           <div class="muted small">${esc(d.severity)} · ${d.weight} pts · ${d.conditions.map(cn => condText(cn, d.dataset || 'well')).join(' · ')}</div></td>
           <td style="white-space:nowrap">${inUse ? '<span class="muted small">in use</span>' : `<button class="btn small" data-add="${d.id}">Add</button>`}</td></tr>`; }).join('')}</tbody></table></div>`);
       document.querySelectorAll('[data-add]').forEach(b => b.onclick = async () => { RULES.push(clone(F.DEFAULT_RULES.find(d => d.id === b.dataset.add))); await persist('Rule added'); draw(); });
@@ -676,7 +701,7 @@
       D.saved_rules[ENG] = {rules: clone(RULES), mode: MODE, saved_by: r.saved_by, saved_at: new Date().toISOString().replace('T', ' ')}; D.settings[ENG] = {safety_first: SAFETY_FIRST, wo_handled: WO_HANDLED}; rulesSource = 'saved'; toast(msg + ' · saved'); render();
     } catch (e) { toast('Could not save: ' + e.message); }
   }
-  function toast(t) { const el = document.createElement('div'); el.className = 'toast'; el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 3500); }
+  function toast(t) { const el = document.createElement('div'); el.className = 'toast' + (/^Could not|failed/i.test(t) ? ' err' : ''); el.setAttribute('role', 'status'); el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 3500); }
 
   function editRule(i, preset) {
     const isNew = i === null;
@@ -708,7 +733,7 @@
             <select class="c-op">${ops.map(([o, l]) => `<option value="${o}" ${o === cn.op ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
             ${F.NEEDS_FIELD.has(cn.op) ? `<select class="c-v">${fieldOpts(ds, cn.value, true)}</select>`
               : F.NEEDS_VALUE.has(cn.op) ? `<input class="c-v" type="text" value="${esc(cn.value ?? '')}" placeholder="${f.type === 'text' ? 'value' : f.type === 'date' ? 'days' : 'number'}">` : '<span></span>'}
-            <button class="btn danger c-del" title="Remove condition">✕</button></div>
+            <button class="btn danger c-del" title="Remove condition" aria-label="Remove condition">${ic('x', 'md')}</button></div>
             <div class="note" style="margin:-3px 0 6px">${esc(f.help)}</div>`; }).join('')}
         <button class="btn sec" id="e-add">+ Add condition</button>
         <label>Message on the flag <span class="muted" style="font-weight:400">· ${esc(tips)}</span></label>
@@ -783,7 +808,7 @@
       const res = await post('api/chat', {conversation_id: chat.id, message: q, engineer_id: ENG, engineer_name: engName(), ranking, rules: RULES, safety_first: SAFETY_FIRST, ranking_mode: MODE, wo_handled: WO_HANDLED});
       chat.id = res.conversation_id; Object.assign(chat.evidence, res.evidence);
       $('#pending').outerHTML = `<div class="m a">${renderAnswer(res)}</div>`;
-    } catch (e) { $('#pending').outerHTML = `<div class="m a"><span style="color:var(--crit)">Error: ${esc(e.message)}</span></div>`; }
+    } catch (e) { $('#pending').outerHTML = `<div class="m a"><span style="color:var(--dk-status-bad)">The assistant couldn't answer: ${esc(e.message)}. Try again in a moment.</span></div>`; }
     chat.busy = false; $('#send').disabled = false; bindCites(); scrollChat();
   }
   function scrollChat() { const m = $('#msgs'); m.scrollTop = m.scrollHeight; }
@@ -802,19 +827,19 @@
     if (inList) out += '</ul>';
     const s = res.summary, bad = s.no_source + s.number_mismatch + s.unknown_citation;
     if (s.unsourced) return out + sourcesHtml(res);
-    out += s.statements ? `<div class="verdict ${bad ? 'bad' : 'ok'}">${bad ? `⚠ ${s.ok} of ${s.statements} factual statements verified. Highlighted text could not be matched to the cited data; check it before relying on it.`
-      : `✓ All ${s.statements} factual statement${s.statements > 1 ? 's' : ''} verified against the cited data.`}</div>` : '';
+    out += s.statements ? `<div class="verdict ${bad ? 'bad' : 'ok'}">${bad ? `${ic('alert')} <span>${s.ok} of ${s.statements} factual statements verified. Highlighted text could not be matched to the cited data; check it before relying on it.</span>`
+      : `${ic('check')} <span>All ${s.statements} factual statement${s.statements > 1 ? 's' : ''} verified against the cited data.</span>`}</div>` : '';
     out += sourcesHtml(res);
-    if (res.trace.length) out += `<div class="trace">Looked up: ${res.trace.map(t => `${esc(t.tool.replace(/_/g, ' '))}${t.args.well_id ? ' ' + esc(t.args.well_id) : ''}${t.evidence_id ? ` → <span class="cite" data-ev="${t.evidence_id}">${t.evidence_id}</span>` : t.error ? ' (error)' : ''}`).join(' · ')}</div>`;
+    if (res.trace.length) out += `<div class="trace">Looked up: ${res.trace.map(t => `${esc(t.tool.replace(/_/g, ' '))}${t.args.well_id ? ' ' + esc(t.args.well_id) : ''}${t.evidence_id ? `, <span class="cite" data-ev="${t.evidence_id}">${t.evidence_id}</span>` : t.error ? ' (error)' : ''}`).join(' · ')}</div>`;
     return out;
   }
   // Every answer ends with the sources the app actually queried (built by the app, not written by the model).
   const tableUrl = t => /^[\w]+\.[\w]+\.[\w]+$/.test(t) ? `${D.workspace_url}/explore/data/${t.split('.').join('/')}` : null;
   function sourcesHtml(res) {
     const src = res.sources || [];
-    if (!src.length) return `<div class="verdict bad" style="background:#fde3df;color:var(--crit)">⚠ No data was looked up for this answer, so it has no source. Don't rely on it; try rephrasing the question.</div>`;
+    if (!src.length) return `<div class="verdict none">${ic('alert')} <span>No data was looked up for this answer, so it has no source. Don't rely on it; try rephrasing the question.</span></div>`;
     return `<div class="srcs"><b>Sources (${src.length})</b>${src.map(s => { const e = res.evidence[s.id] || chat.evidence[s.id]; if (!e) return '';
-      const tabs = (e.tables || [e.table]).map(t => { const u = tableUrl(t); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t.split('.').pop())} ↗</a>` : esc(t); }).join(', ');
+      const tabs = (e.tables || [e.table]).map(t => { const u = tableUrl(t); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t.split('.').pop())} ${ic('ext')}</a>` : esc(t); }).join(', ');
       return `<div class="src"><span class="cite" data-ev="${s.id}">${s.id}</span> ${esc(e.title)}${s.cited ? '' : ' <span class="muted">(checked, not cited)</span>'}
         <div class="muted">${esc(e.row_count)} row${e.row_count === 1 ? '' : 's'} from ${tabs} · <a class="lk" data-ev2="${s.id}">view rows and trace to raw file</a></div></div>`; }).join('')}</div>`;
   }
@@ -836,7 +861,7 @@
       return null;
     };
     showModal(`<div class="mhead"><span class="cite" style="font-size:13px">${esc(id)}</span><h2>${esc(e.title)}</h2><button class="btn sec close" id="mx">Close</button></div>
-      <div class="mbody"><div><span class="layer ${layer}">${esc(e.layer)}</span> ${(e.tables || [e.table]).map(t => tableUrl(t) ? `<a class="small" href="${esc(tableUrl(t))}" target="_blank" rel="noopener"><code>${esc(t)}</code> ↗</a>` : `<code class="small">${esc(t)}</code>`).join(' ')} · <span class="muted small">tool: ${esc(e.tool)} · ${e.row_count} row${e.row_count === 1 ? '' : 's'}</span></div>
+      <div class="mbody"><div><span class="layer ${layer}">${esc(e.layer)}</span> ${(e.tables || [e.table]).map(t => tableUrl(t) ? `<a class="small" href="${esc(tableUrl(t))}" target="_blank" rel="noopener"><code>${esc(t)}</code> ${ic('ext')}</a>` : `<code class="small">${esc(t)}</code>`).join(' ')} · <span class="muted small">tool: ${esc(e.tool)} · ${e.row_count} row${e.row_count === 1 ? '' : 's'}</span></div>
         <h3>Query the assistant ran</h3><pre class="sql">${esc(e.sql)}</pre>
         ${e.summary ? `<h3>Summary computed by the tool (not by the model)</h3>${rowsTable([e.summary])}` : ''}
         <h3>Rows returned <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· "trace" follows a row back to silver, bronze and the raw file</span></h3>

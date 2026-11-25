@@ -4,6 +4,10 @@ This guide is for anyone using Well Watch, including people with no oil and gas 
 
 > **All data in this app is synthetic.** It contains 200 made-up wells, 4 made-up engineers, and problems planted on purpose for testing. No real company data is used.
 
+## Look and feel
+
+Well Watch uses the **Dakota Design System**: Manrope for titles, Inter for text, JetBrains Mono for well IDs and dates, Lucide icons, and status shown with an icon plus a colour (never colour alone). The amber **Synthetic data** pill in the top bar is a reminder that nothing here is real. Use the sun or moon button next to the engineer picker to switch between light and dark; the app remembers your choice and otherwise follows your computer's setting.
+
 ---
 
 ## What Well Watch is for
@@ -55,7 +59,7 @@ The numbers next to each tab are counts. For example, *Safety 6* means 6 wells h
 
 ### The data bar (under the tabs)
 
-This bar shows how current each **source system** is: production, safety readings and downtime "through" a date, the test and incident systems by when they last updated, and costs through the last closed month. A dot is green when the source arrived on time and turns amber (⚠) when it is late, so numbers from it may be out of date. Click **details** for the full table.
+This bar shows how current each **source system** is: production, safety readings and downtime "through" a date, the test and incident systems by when they last updated, and costs through the last closed month. A source shows a green check when it arrived on time and an amber warning icon when it is late, so numbers from it may be out of date. Click **details** for the full table.
 
 ![Data sources](images/12_freshness.png)
 
@@ -117,7 +121,7 @@ Safety always comes first. A gas leak matters more than a well losing $7,000 a d
 - **Links under each flag:**
   - **mark as being handled:** say **who is handling it** and a **follow-up date**. It leaves your list until then, and comes back sooner if it gets more than 10% worse than when you marked it, or if a new related record appears (for example, another alarm). Safety flags also need a note on how it's being handled.
   - **add fix cost estimate:** enter what you think the fix will cost. This improves the payback ranking.
-  - **add note:** attach context to this flag. It appears under the flag, marked 📝.
+  - **add note:** attach context to this flag. It appears under the flag, marked with a note icon.
 
 ![Mark as being handled](images/11_mark_handled.png)
 - **Buttons:**
@@ -277,7 +281,7 @@ Type a question in plain English. Good examples:
 **How to trust an answer:**
 - **[E1], [E2] chips** after each fact: click one to see the exact query and rows it came from.
 - **Green ✓ "All statements verified":** every number cited was checked against the data.
-- **Amber ⚠ with highlighted text:** a number could not be matched to the data, usually because the assistant did its own arithmetic. Check it before relying on it.
+- **Amber warning with highlighted text:** a number could not be matched to the data, usually because the assistant did its own arithmetic. Check it before relying on it.
 - **Sources** (bottom of every answer): the tables the answer used, with **↗** links to Databricks and **view rows and trace to raw file**. Sources are added by the app, not written by the AI. If an answer has no source, it says so in red.
 
 **The assistant's limits:**
@@ -292,20 +296,20 @@ Type a question in plain English. Good examples:
 |---|---|
 | Red **Critical** tag | A problem to act on today |
 | Orange **Warning** tag | A real problem, not yet urgent |
-| Purple **Review** tag | A heads-up, nothing wrong yet |
-| Dark red **SAFETY** tag | The flag is about safety, not production |
-| Orange **BACK** tag | A flag that was marked as being handled has come back because it got worse |
+| Blue **Review** tag | A heads-up, nothing wrong yet |
+| Blue **Safety** tag with a shield icon | The flag is about safety, not production |
+| Orange **Back** tag | A flag that was marked as being handled has come back because it got worse |
 | Grey **Safety-critical** label | The test is important. Not a result. |
-| Green **✓ OK** | Test passed and not due soon |
-| Amber **Due in N d** / **OK · monitor** | Coming up soon, or a known minor issue being watched |
-| Red **N d overdue** / **✗ Failed** / **Open** | Needs action |
-| Red border, **⚑ why it's flagged** | This box or chart is behind the flag |
-| 📝 with an amber "waiting for…" | A note reporting something the official system doesn't show yet |
-| Green "✓ confirmed by the official record" | The record a note was waiting for has arrived |
+| Green **OK** with a check | Test passed and not due soon |
+| Amber **Due soon** / **OK, monitor** | Coming up soon, or a known minor issue being watched |
+| Red **Overdue or failed** (with an x) / **Open** | Needs action |
+| Red border, flag icon and **why it's flagged** | This box or chart is behind the flag |
+| Note with an amber "waiting for…" | A note reporting something the official system doesn't show yet |
+| Green check, "confirmed by the official record" | The record a note was waiting for has arrived |
 | Red "not in the system yet" | A note's expected date passed without the record; the well gets a reminder |
-| Amber ⚠ in the data bar | A source system is late; its numbers may be out of date |
+| Amber warning icon in the data bar | A source system is late; its numbers may be out of date |
 | Red cell in a trace | This value crossed the rule's limit |
-| **GOLD / SILVER / BRONZE** | Finished / cleaned / as-received data |
+| **gold / silver / bronze** | Finished / cleaned / as-received data |
 
 ---
 

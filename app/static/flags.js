@@ -113,9 +113,9 @@
   const DATASETS = {
     well: {label: 'Well readings & status', short: 'well', fields: WELL_FIELDS},
     test: {label: 'Tests & inspections', short: 'test', fields: TEST_FIELDS,
-           describe: t => `${t.test_type}: ${['Fail', 'Serious'].includes(t.last_result) ? `last result ${t.last_result.toUpperCase()}` : t.overdue ? `${t.days_overdue} d OVERDUE (was due ${String(t.next_due_date || '').slice(0, 10)})` : `due in ${t.days_until_due} d (${String(t.next_due_date || '').slice(0, 10)})`}${t.result_unit && t.result_value !== null && t.result_value !== undefined && t.result_value !== '' ? `, measured ${t.result_value} ${t.result_unit}` : ''}${['Fail', 'Serious'].includes(t.last_result) ? '' : `; last done ${String(t.last_test_date || '').slice(0, 10)}, ${t.last_result}`}`},
+           describe: t => `${t.test_type}: ${['Fail', 'Serious'].includes(t.last_result) ? `last result ${t.last_result.toLowerCase()}` : t.overdue ? `${t.days_overdue} d overdue (was due ${String(t.next_due_date || '').slice(0, 10)})` : `due in ${t.days_until_due} d (${String(t.next_due_date || '').slice(0, 10)})`}${t.result_unit && t.result_value !== null && t.result_value !== undefined && t.result_value !== '' ? `, measured ${t.result_value} ${t.result_unit}` : ''}${['Fail', 'Serious'].includes(t.last_result) ? '' : `; last done ${String(t.last_test_date || '').slice(0, 10)}, ${t.last_result}`}`},
     event: {label: 'Safety events', short: 'event', fields: EVENT_FIELDS,
-            describe: e => `${String(e.event_date).slice(0, 10)} ${e.category}${e.volume_m3 ? ` ${e.volume_m3} m3` : ''} · ${e.status}${e.reportable && !e.reported_to_regulator ? ' · NOT REPORTED' : ''}`},
+            describe: e => `${String(e.event_date).slice(0, 10)} ${e.category}${e.volume_m3 ? ` ${e.volume_m3} m3` : ''} · ${e.status}${e.reportable && !e.reported_to_regulator ? ' · not reported' : ''}`},
   };
   const maps = {};
   const rebuild = () => { for (const k in DATASETS) maps[k] = Object.fromEntries(DATASETS[k].fields.map(f => [f.field, f])); };

@@ -4,6 +4,8 @@ A Databricks App for production engineers who look after hundreds of wells. Ever
 
 All data is synthetic: 200 wells, 4 engineers, 6 months of daily data.
 
+The UI follows the Dakota Design System (dk tokens, Manrope/Inter/JetBrains Mono, Lucide icons) with light and dark themes. Fonts load from Google Fonts.
+
 **New to the app, or to oil and gas?** Read the [user guide](docs/USER_GUIDE.md). It covers how to read each screen, what the colours mean, a glossary, and a five-minute demo script. This README is the technical overview.
 
 ## What's in here
@@ -96,7 +98,7 @@ Saved to: `app_flag_rules`, `app_flag_settings`, `app_flag_acks` and `app_fix_es
    - any sentence with a number or a well ID must be cited;
    - every number in a cited sentence must appear in that evidence.
 
-   Anything that fails is highlighted in the UI. The answer shows "✓ all statements verified" or "⚠ n of m verified".
+   Anything that fails is highlighted in the UI. The answer shows "All n factual statements verified" with a check, or a warning with "n of m verified".
 4. **Every evidence row can be traced back to its source.** Rows trace back through silver and bronze to the raw landing file. Lineage shows which cleaning rules applied and, for resent days, which bronze version won.
 
 ### Every answer shows where its data came from
