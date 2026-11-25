@@ -91,17 +91,7 @@ AS SELECT event_id, well_id, cast(event_ts AS TIMESTAMP) AS event_ts, cast(event
 FROM workspace.well_ops.bronze_safety_events;
 
 -- -------- app tables (written by the app; the service principal gets MODIFY on these only) --------
-CREATE TABLE IF NOT EXISTS workspace.well_ops.app_compliance_entries (entry_id STRING, well_id STRING, test_type STRING, test_group STRING, interval_months INT,
-  safety_critical BOOLEAN, test_date DATE, result_status STRING, result_value DOUBLE, result_unit STRING, notes STRING, entered_by STRING, entered_at TIMESTAMP)
-COMMENT 'Tests and inspections logged by engineers in Well Watch (any type, including ones not in the catalog).';
-
-CREATE TABLE IF NOT EXISTS workspace.well_ops.app_safety_event_entries (event_id STRING, well_id STRING, event_date DATE, category STRING, description STRING,
-  planned BOOLEAN, volume_m3 DOUBLE, substance STRING, reportable BOOLEAN, reported_to_regulator BOOLEAN, status STRING, entered_by STRING, entered_at TIMESTAMP)
-COMMENT 'Safety events logged by engineers in Well Watch (any category).';
-
-CREATE TABLE IF NOT EXISTS workspace.well_ops.app_event_updates (event_id STRING, status STRING, reported_to_regulator BOOLEAN, note STRING, updated_by STRING, updated_at TIMESTAMP)
-COMMENT 'Status updates engineers make to safety events (system or manual). Latest row per event wins.';
-
+-- Tests and safety events are NOT written by the app: they come from the maintenance/integrity system and the HSE incident system.
 CREATE TABLE IF NOT EXISTS workspace.well_ops.app_custom_fields (field_key STRING, label STRING, field_type STRING, help STRING, created_by STRING, created_at TIMESTAMP)
 COMMENT 'Per-well fields engineers define themselves (number, text, yes/no, date) so any safety measure can be tracked with a rule.';
 
@@ -122,32 +112,19 @@ FROM workspace.well_ops.silver_safety_readings r JOIN workspace.well_ops.silver_
 LEFT JOIN workspace.well_ops.gold_daily_well d ON d.well_id = r.well_id AND d.prod_date = r.reading_date;
 
 CREATE OR REPLACE VIEW workspace.well_ops.gold_v_compliance_items
-COMMENT 'GOLD VIEW. Latest test of each type per well, from the compliance system and from tests logged in the app (whichever is newer), with next due date. Today = 2026-11-23.'
-AS WITH allt AS (
-  SELECT well_id, test_type, test_group, interval_months, safety_critical, test_date, result_status, result_value, result_unit, notes, 'system' AS source, test_id AS record_id
-  FROM workspace.well_ops.silver_compliance_tests
-  UNION ALL
-  SELECT well_id, test_type, test_group, interval_months, safety_critical, test_date, result_status, result_value, result_unit, notes, 'app: ' || entered_by AS source, entry_id
-  FROM workspace.well_ops.app_compliance_entries),
-latest AS (SELECT *, row_number() OVER (PARTITION BY well_id, test_type ORDER BY test_date DESC, source) AS rn FROM allt)
-SELECT well_id, test_type, test_group, interval_months, safety_critical, test_date AS last_test_date, result_status AS last_result, result_value, result_unit, notes, source, record_id,
+COMMENT 'GOLD VIEW. Latest test of each type per well from the maintenance / integrity system, with next due date. Today = 2026-11-23.'
+AS WITH latest AS (SELECT *, row_number() OVER (PARTITION BY well_id, test_type ORDER BY test_date DESC) AS rn FROM workspace.well_ops.silver_compliance_tests)
+SELECT well_id, test_type, test_group, interval_months, safety_critical, test_date AS last_test_date, result_status AS last_result, result_value, result_unit, notes,
+  'Maintenance system' AS source, test_id AS record_id,
   add_months(test_date, interval_months) AS next_due_date, datediff(add_months(test_date, interval_months), DATE'2026-11-23') AS days_until_due,
   datediff(add_months(test_date, interval_months), DATE'2026-11-23') < 0 AS overdue, greatest(0, -datediff(add_months(test_date, interval_months), DATE'2026-11-23')) AS days_overdue
 FROM latest WHERE rn = 1;
 
 CREATE OR REPLACE VIEW workspace.well_ops.gold_v_safety_events
-COMMENT 'GOLD VIEW. Safety events from the field log and from the app, with the latest status update applied. days_ago relative to 2026-11-23.'
-AS WITH alle AS (
-  SELECT event_id, well_id, event_date, category, event_type_original, description, planned, volume_m3, substance, reportable, reported_to_regulator, status, 'system' AS source
-  FROM workspace.well_ops.silver_safety_events
-  UNION ALL
-  SELECT event_id, well_id, event_date, category, category, description, planned, volume_m3, substance, reportable, reported_to_regulator, status, 'app: ' || entered_by
-  FROM workspace.well_ops.app_safety_event_entries),
-upd AS (SELECT * FROM (SELECT *, row_number() OVER (PARTITION BY event_id ORDER BY updated_at DESC) rn FROM workspace.well_ops.app_event_updates) WHERE rn = 1)
-SELECT e.event_id, e.well_id, e.event_date, e.category, e.event_type_original, e.description, e.planned, e.volume_m3, e.substance, e.reportable,
-  coalesce(u.reported_to_regulator, e.reported_to_regulator) AS reported_to_regulator, coalesce(u.status, e.status) AS status, e.source,
-  u.note AS last_update_note, u.updated_by AS last_updated_by, datediff(DATE'2026-11-23', e.event_date) AS days_ago
-FROM alle e LEFT JOIN upd u USING (event_id);
+COMMENT 'GOLD VIEW. Safety events from the HSE incident system. days_ago relative to 2026-11-23.'
+AS SELECT event_id, well_id, event_date, category, event_type_original, description, planned, volume_m3, substance, reportable, reported_to_regulator, status,
+  'HSE incident system' AS source, datediff(DATE'2026-11-23', event_date) AS days_ago
+FROM workspace.well_ops.silver_safety_events;
 
 CREATE OR REPLACE VIEW workspace.well_ops.gold_v_well_safety
 COMMENT 'GOLD VIEW. One row per well with every safety field the flag rules use. Recent = Nov 16-22, baseline = Oct 10 - Nov 8, month to date = Nov 1-22.'
