@@ -44,7 +44,12 @@
   .dk-mark { width:34px; height:34px; border-radius:8px; background:var(--dk-brand-bluegrey); display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
   .dk-brand-name { font:700 16px/20px var(--dk-font-display); }
   .dk-brand-ws { font-size:12px; line-height:16px; color:var(--dk-on-surface-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .dk-top-tools { margin-left:auto; display:flex; align-items:center; gap:12px; }
+  .dk-top-tools { margin-left:auto; display:flex; align-items:center; gap:12px; flex-shrink:0; }
+  .dk-brand { overflow:hidden; } .dk-brand > div { min-width:0; } .dk-brand > .pill { flex-shrink:0; }
+  @media (max-width: 1500px) { .dk-top-tools > label[for="eng"] { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; } }
+  .incnext label { display:block; margin:8px 0 4px; font:500 13px/18px var(--dk-font-body); }
+  .incnext textarea, .incnext input { width:100%; box-sizing:border-box; }
+  .incnext textarea { min-height:70px; }
   .dk-icon-btn { width:36px; height:36px; border-radius:8px; border:0; background:none; display:inline-flex; align-items:center; justify-content:center; color:var(--dk-on-surface-muted); }
   .dk-icon-btn:hover { background:var(--dk-surface-container); color:var(--dk-on-surface); } .dk-icon-btn .ico { width:18px; height:18px; }
   .freshbar { padding:6px 32px; font-size:12px; line-height:16px; color:var(--dk-on-surface-muted); display:flex; gap:14px; flex-wrap:wrap; align-items:center; font-variant-numeric:tabular-nums; }
@@ -59,6 +64,21 @@
   nav#nav button:hover { color:var(--dk-on-surface); }
   nav#nav button.on { color:var(--dk-on-surface); font-weight:600; }
   nav#nav button.on::after { content:""; position:absolute; left:12px; right:12px; bottom:-1px; height:2px; background:var(--dk-primary-container); border-radius:2px; }
+  nav .count.alarm { background:var(--dk-status-bad); color:#fff; }
+  .btn.danger-solid { background:var(--dk-status-bad); border-color:var(--dk-status-bad); color:#fff; }
+  .btn.danger-solid:hover { filter:brightness(1.08); }
+  .emerg { border:2px solid var(--dk-status-bad); background:var(--dk-status-bad-bg); border-radius:10px; padding:10px 14px; margin-bottom:12px; font:400 14px/21px var(--dk-font-body); }
+  .emerg b { color:var(--dk-status-bad); } .emerg ul { margin:6px 0 4px; padding-left:18px; } .emerg a { color:inherit; font-weight:600; }
+  .incsteps { display:flex; gap:4px; list-style:none; padding:0; margin:0 0 14px; flex-wrap:wrap; }
+  .incsteps li { flex:1 1 120px; font:500 12px/16px var(--dk-font-body); padding:6px 8px; border-radius:6px; background:var(--dk-surface-container); color:var(--dk-on-surface-muted); }
+  .incsteps li.done { background:var(--dk-status-ok-bg); color:var(--dk-status-ok); } .incsteps li.now { background:var(--dk-primary-container); color:var(--dk-on-primary-container, #fff); font-weight:700; }
+  .inccard { background:var(--dk-surface-container-lowest); border:1px solid var(--dk-ghost-border); border-radius:10px; padding:12px 14px; margin-bottom:8px; cursor:pointer; }
+  .inccard:hover, .inccard:focus-visible { border-color:var(--dk-primary-container); outline:none; } .inccard.closed { opacity:.7; }
+  .inchead { display:flex; gap:8px; align-items:center; flex-wrap:wrap; } .incwhat { margin:6px 0; font-size:14px; }
+  .incgrid { display:grid; grid-template-columns:minmax(0, 1.1fr) minmax(0, 1fr); gap:20px; } .incgrid h3 { margin:14px 0 6px; }
+  .incfacts { display:grid; gap:6px; font-size:13px; } .incfacts span { display:block; font-size:12px; color:var(--dk-on-surface-muted); }
+  .inctl { margin:0; padding-left:18px; font-size:13px; display:flex; flex-direction:column; gap:6px; max-height:320px; overflow:auto; }
+  @media (max-width: 800px) { .incgrid { grid-template-columns:1fr; } }
   nav .count { margin-left:6px; font-variant-numeric:tabular-nums; font-size:11px; color:var(--dk-on-surface-subtle); padding:1px 6px; border-radius:999px; background:var(--dk-surface-container); }
   main { min-width:0; }
 
@@ -289,6 +309,7 @@
   <div class="dk-top-tools">
     <label class="muted" for="eng" style="font-size:13px">Engineer</label><select id="eng" style="min-height:36px"></select>
     <button class="dk-icon-btn" id="themebtn" title="Switch light or dark theme" aria-label="Switch light or dark theme"></button>
+    <button class="btn danger-solid" id="reportbtn" title="Report a safety issue: notifies the on-call chain at once">Report safety issue</button>
     <button class="btn" id="chatbtn">Ask the data</button>
   </div>
 </header>
@@ -299,6 +320,7 @@
     <button data-v="day" class="on" role="tab">My day <span class="count" id="c-day"></span></button>
     <button data-v="wells" role="tab">My wells <span class="count" id="c-wells"></span></button>
     <button data-v="safety" role="tab">Safety <span class="count" id="c-safety"></span></button>
+    <button data-v="incidents" role="tab">Safety incidents <span class="count" id="c-inc"></span></button>
     <button data-v="alerts" role="tab">Alerts <span class="count" id="c-alerts"></span></button>
     <button data-v="rules" role="tab">Flag rules <span class="count" id="c-rules"></span></button>
   </nav>

@@ -25,8 +25,11 @@ dest = f"/Workspace/Users/{me}/apps/{APP}"
 print("target", TARGET, w.config.host, "as", me)
 
 # 1. upload source; app.yaml gets this target's schema
+# The built-in safety rules the server enforces are generated from the flag engine, so the two never drift.
+import subprocess
+subprocess.run(["node", "-e", "const F=require('./static/flags.js');require('fs').writeFileSync('locked_rules.json',JSON.stringify({note:'Built-in safety rules, generated from static/flags.js by deploy.py. The server puts these back on every rule save, so they cannot be turned off, weakened or deleted.',rules:F.DEFAULT_RULES.filter(F.isSafety)},null,1))"], cwd=HERE, check=True)
 w.workspace.mkdirs(dest + "/static")
-for rel in ["app.py", "agent.py", "alerts.py", "app.yaml", "requirements.txt", "static/index.html", "static/app.js", "static/flags.js"]:
+for rel in ["app.py", "agent.py", "alerts.py", "incidents.py", "locked_rules.json", "app.yaml", "requirements.txt", "static/index.html", "static/app.js", "static/flags.js"]:
     with open(os.path.join(HERE, rel), "rb") as f:
         data = f.read()
     if rel == "app.yaml":
@@ -55,7 +58,8 @@ for g in [f"GRANT USE CATALOG ON CATALOG {catalog} TO `{sp}`",
           f"GRANT USE SCHEMA, SELECT ON SCHEMA {SCHEMA} TO `{sp}`",
           f"GRANT READ VOLUME ON VOLUME {SCHEMA}.landing TO `{sp}`",
           *[f"GRANT MODIFY ON TABLE {SCHEMA}.{t} TO `{sp}`" for t in ("app_flag_rules", "app_flag_settings", "app_custom_fields", "app_well_attributes",
-                                                                     "app_flag_acks", "app_fix_estimates", "app_well_notes", "app_alert_tasks")]]:
+                                                                     "app_flag_acks", "app_fix_estimates", "app_well_notes", "app_alert_tasks",
+                                                                     "app_safety_incidents", "app_incident_events", "app_incident_notifications", "app_corrective_actions")]]:
     try:
         sql(w, g, WH)
     except RuntimeError as e:

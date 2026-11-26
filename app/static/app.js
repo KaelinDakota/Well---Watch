@@ -68,7 +68,9 @@
     const rm = /^report\/([\w-]+)(?:\/(\w+))?/.exec((location.hash || '').slice(1));
     if (rm) { renderReport(rm[1], rm[2]); return; }
     loadRules(); newChat();
-    const h = (location.hash || '').slice(1); if (['day', 'wells', 'safety', 'rules', 'alerts'].includes(h)) view = h;
+    $('#reportbtn').onclick = () => reportIncident();
+    loadIncidents().then(() => { if (view === 'incidents') renderIncidents(); }); watchIncidents(true);
+    const h = (location.hash || '').slice(1); if (['day', 'wells', 'safety', 'rules', 'alerts', 'incidents'].includes(h)) view = h;
     toggleChat(store.get('ww-chat') !== 'closed');
     render();
   }
@@ -83,11 +85,20 @@
       for (const r of RULES) { if (r.group === undefined && F.GROUPS[r.id]) r.group = F.GROUPS[r.id]; if (r.fix_cost === undefined && F.FIX_COSTS[r.id]) r.fix_cost = F.FIX_COSTS[r.id]; }
       // rule sets saved before the safety pack existed get it added once
       if (!RULES.some(r => String(r.id).startsWith('SAFE_'))) RULES = clone(F.DEFAULT_RULES.filter(r => String(r.id).startsWith('SAFE_'))).concat(RULES);
+      RULES = restoreLocked(RULES);
     } else { RULES = clone(F.DEFAULT_RULES); MODE = 'value'; rulesSource = 'default'; }
     const st = D.settings[ENG] || {};
-    SAFETY_FIRST = st.safety_first === undefined || st.safety_first === null ? true : !!st.safety_first;
+    SAFETY_FIRST = true; // safety always ranks first; there is no setting to turn it off
     WO_HANDLED = !!st.wo_handled;
     recompute();
+  }
+  // Built-in safety rules are set by the operator: always on, never edited or deleted here. The server enforces the same on save.
+  const LOCKED = new Map(F.DEFAULT_RULES.filter(F.isSafety).map(r => [r.id, r]));
+  const isLocked = r => !!r && LOCKED.has(r.id);
+  function restoreLocked(rules) {
+    const out = rules.map(r => LOCKED.has(r.id) ? clone(LOCKED.get(r.id)) : r);
+    for (const [id, r] of LOCKED) if (!out.some(x => x.id === id)) out.push(clone(r));
+    return out;
   }
   function recompute() {
     ACKS = {}; EST = {};
@@ -123,7 +134,7 @@
   }
   function render() {
     renderFreshness();
-    const titles = {day: 'My day', wells: 'My wells', safety: 'Safety', rules: 'Flag rules', alerts: 'Alerts'};
+    const titles = {day: 'My day', wells: 'My wells', safety: 'Safety', rules: 'Flag rules', alerts: 'Alerts', incidents: 'Safety incidents'};
     $('#ptitle').textContent = titles[view];
     $('#pmeta').innerHTML = `${esc(engName() || '')}<span class="sep" style="opacity:.5;padding:0 6px">·</span>${myWells().length} wells<span class="sep" style="opacity:.5;padding:0 6px">·</span>Data through ${esc(D.as_of)}`;
     document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
@@ -132,7 +143,7 @@
     $('#c-safety').textContent = RANK.filter(r => r.tier === 'safety').length;
     $('#c-alerts').textContent = needsAlert().length;
     renderSimBar();
-    ({day: renderDay, wells: renderWells, safety: renderSafety, rules: renderRules, alerts: renderAlerts})[view]();
+    ({day: renderDay, wells: renderWells, safety: renderSafety, rules: renderRules, alerts: renderAlerts, incidents: renderIncidents})[view]();
   }
   function bindCommon(root = document) {
     root.querySelectorAll('[data-well]').forEach(a => a.onclick = () => openWell(a.dataset.well));
@@ -276,14 +287,16 @@
     const chips = f.items ? f.evidence.map(e => `<span class="chip hit lk2" ${lin(itemLin(e.item))} title="Trace this record">${esc(e.value)}</span>`).join('')
       : f.evidence.map(e => `<span class="chip ${e.matched ? 'hit' : ''}">${esc(e.label)}: ${esc(e.value)}</span>`).join('');
     const key = esc(JSON.stringify({w: f.well_id, r: f.rule_id}));
-    const h = f.handled, meta = [];
+    const h = f.handled, ih = f.in_hand, meta = [];
     if (!h) meta.push(`${f.weight} pts${f.counted === false ? ` <span class="muted">(not added: counted once with "${esc(f.counted_with)}")</span>` : ''}`);
     if (!h && f.fix_cost !== null && f.fix_cost !== undefined) meta.push(`fix ≈ $${fmt(f.fix_cost)} <span class="muted">(${esc(f.fix_cost_source)})</span>`);
     const acts = (h ? (h.type === 'ack' ? `<a class="lk" data-unack='${key}'>no longer being handled</a>` : '')
-      : `${alertable(f) ? `<a class="lk" data-alert='${key}'>${ic('flag')} draft alert</a> · ` : ''}<a class="lk" data-ack='${key}'>mark as being handled</a>${!f.safety ? ` · <a class="lk" data-est='${key}'>${EST[f.well_id + '|' + f.rule_id] !== undefined ? 'change' : 'add'} fix cost estimate</a>` : ''}`) + ` · <a class="lk" data-note='${key}'>add note</a>`;
+      : ih ? `${alertable(f) ? `<a class="lk" data-alert='${key}'>${ic('flag')} draft alert</a> · ` : ''}<a class="lk" data-report='${key}'>report safety incident</a> · <a class="lk" data-unack='${key}'>clear who is handling it</a>`
+      : `${alertable(f) ? `<a class="lk" data-alert='${key}'>${ic('flag')} draft alert</a> · ` : ''}${f.safety ? `<a class="lk" data-report='${key}'>report safety incident</a> · ` : ''}<a class="lk" data-ack='${key}'>${f.safety ? 'record who is handling it' : 'mark as being handled'}</a>${!f.safety ? ` · <a class="lk" data-est='${key}'>${EST[f.well_id + '|' + f.rule_id] !== undefined ? 'change' : 'add'} fix cost estimate</a>` : ''}`) + ` · <a class="lk" data-note='${key}'>add note</a>`;
     const fnotes = D.notes.filter(n => n.well_id === f.well_id && n.rule_id === f.rule_id);
     return `<div class="flag" style="${h ? 'opacity:.6' : ''}"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? SAFETY_TAG : ''}${f.resurfaced ? `<span class="shield back">${ic('undo')}Back on the list</span>` : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}</div>
       ${f.resurfaced ? `<div class="act" style="color:var(--dk-status-amber)">Back on the list: ${esc(f.resurfaced)}.</div>` : ''}
+      ${ih ? `<div class="act"><b>Being handled</b>${ih.owner ? ` by <b>${esc(ih.owner)}</b>` : ''} · follow up by ${esc(String(ih.until).slice(0, 10))} <span class="muted">(recorded by ${esc(ih.by || '')})</span>${ih.note ? ` · ${esc(ih.note)}` : ''}. <span class="muted">Safety flags stay on the list until the reading clears.</span></div>` : ''}
       ${h ? `<div class="act"><b>Being handled</b>${h.type === 'ack' ? `${h.owner ? ` by <b>${esc(h.owner)}</b>` : ''} · follow up by ${esc(String(h.until).slice(0, 10))} <span class="muted">(marked by ${esc(h.by || '')})</span>` : ' (open work order)'}${h.note ? ` · ${esc(h.note)}` : ''}</div>` : ''}
       ${fnotes.length ? `<div class="act">${fnotes.map(n => `${ic('note')} ${esc(n.body)} <span class="muted">· ${esc(n.created_by || '')}</span> ${noteBadge(n)}`).join('<br>')}</div>` : ''}
       <div class="chips">${chips}</div>${f.action && !h ? `<div class="act">Next step: ${esc(f.action)}</div>` : ''}
@@ -312,19 +325,23 @@
       await post('api/acks', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, cleared: true}); await refresh('Back on the list'); });
     root.querySelectorAll('[data-est]').forEach(a => a.onclick = e => { e.stopPropagation(); estForm(find(a.dataset.est)); });
     root.querySelectorAll('[data-alert]').forEach(a => a.onclick = e => { e.stopPropagation(); openAlert(find(a.dataset.alert).f); });
+    root.querySelectorAll('[data-report]').forEach(a => a.onclick = e => { e.stopPropagation(); const {f, rule} = find(a.dataset.report);
+      const g = String((rule && rule.group) || '') + ' ' + f.rule_id;
+      const category = /H2S/i.test(g) ? 'H2S release or alarm' : /Releases|SPILL/i.test(g) ? 'Spill or release' : /GAS_RELEASE|vent/i.test(g) ? 'Gas release' : 'Equipment failure';
+      reportIncident({well_id: f.well_id, category, source_rule_id: f.rule_id, text: `Flag: ${f.rule_name}. ${f.message} `}); });
     root.querySelectorAll('[data-note]').forEach(a => a.onclick = e => { e.stopPropagation(); const {w, r} = JSON.parse(a.dataset.note); noteForm({well_id: w, rule_id: r}); });
   }
   const addDays = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
   function ackForm({rk, f, rule}) {
     const wo = Number(rk.fact.open_work_orders) > 0 ? rk.fact.open_work_order : '';
-    formModal(`Mark as being handled: ${f.rule_name} on ${f.well_id}`, `<div class="note">It leaves the list until the follow-up date. It comes back sooner if it gets worse${f.items ? ' (a new matching record appears)' : ' (a condition moves more than 10% further past its threshold)'}.${f.safety ? ' <b>Safety flag: a note on who is handling it and how is required.</b>' : ''}</div>
+    formModal(`${f.safety ? 'Record who is handling it' : 'Mark as being handled'}: ${f.rule_name} on ${f.well_id}`, `<div class="note">${f.safety ? '<b>Safety flag: it stays on the list, ranked as before, until the reading clears.</b> This records who is handling it and how, so everyone can see it. A note is required.' : `It leaves the list until the follow-up date. It comes back sooner if it gets worse${f.items ? ' (a new matching record appears)' : ' (a condition moves more than 10% further past its threshold)'}.`}</div>
       <div class="frm"><div><label>Who is handling it</label><input id="a-owner" list="a-owners" placeholder="e.g. Field ops (North), Integrity team"><datalist id="a-owners">${['Field ops', 'Production engineer', 'Integrity team', 'HSE', 'Maintenance', 'Service rig contractor', 'Electrician'].map(o => `<option value="${o}">`).join('')}</datalist></div>
       <div><label>Follow up by</label><input id="a-until" type="date" min="${D.today}" max="${addDays(D.today, 30)}" value="${addDays(D.today, 7)}"></div>
       <div class="full"><label>Note${f.safety ? ' (required)' : ''}</label><textarea id="a-note" placeholder="e.g. Pump change booked for Nov 26, Rig 4">${esc(wo ? 'Open work order ' + wo : '')}</textarea></div></div>`, async () => {
         if (f.safety && !val('a-note').trim()) throw new Error('Add a note on who is handling it and how.');
         if (!val('a-owner').trim()) throw new Error('Say who is handling it.');
         await post('api/acks', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, until_date: val('a-until'), note: val('a-note'), owner: val('a-owner'), safety: !!f.safety, snapshot: F.ackSnapshot(f, rule, rk.fact)});
-        $('#modal').hidden = true; await refresh('Marked as being handled');
+        $('#modal').hidden = true; await refresh(f.safety ? 'Recorded who is handling it; the safety flag stays on the list' : 'Marked as being handled');
       });
   }
   function estForm({f, rule}) {
@@ -395,11 +412,11 @@
       <td>${esc(String(t.last_test_date).slice(0, 10))} · ${esc(t.last_result)}</td><td>${testStatus(t)}</td>
       <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(t))}>trace</a></td></tr>`;
     const evRow = e => `<tr><td>${esc(String(e.event_date).slice(0, 10))}</td><td><a class="lk" data-well="${e.well_id}">${e.well_id}</a></td><td><b>${esc(e.category)}</b><div class="muted small">${esc(e.description || '')}</div></td>
-      <td>${e.reportable ? (e.reported_to_regulator ? `<span class="pill ok">${ic('check')} Reported</span>` : `<span class="pill crit">${ic('x')} Not reported</span>`) : '<span class="muted small">Not reportable</span>'}</td>
+      <td>${e.reportable ? (e.reported_to_regulator ? `<span class="pill ok">${ic('check')} Reported</span>` : `<span class="pill crit">${ic('x')} Not reported</span>`) : '<span class="muted small">Not flagged reportable in HSE system</span>'}</td>
       <td style="white-space:nowrap"><a class="lk" ${lin(itemLin(e))}>trace</a></td></tr>`;
     const tblT = (head, rows, empty) => rows.length ? TEST_LEGEND.replace('margin:-4px 0 6px', 'margin:6px 12px') + tbl(head, rows, empty) : tbl(head, rows, empty);
     const tbl = (head, rows, empty) => rows.length ? `<div class="tw" style="max-height:320px;border:0"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : `<div class="muted small" style="padding:10px 12px">${empty}</div>`;
-    $('#main').innerHTML = `<div class="bar"><span class="note" style="max-width:900px">Tests come from the <b>maintenance / integrity system</b> and incidents from the <b>HSE incident system</b>, recorded by field and safety staff. This tab is read-only: to correct a record, fix it in that system. To add context, write a <b>note</b> on the well; for a value the systems don't carry, add a <b>custom field</b>.</span>
+    $('#main').innerHTML = `<div class="bar"><span class="note" style="max-width:900px">Tests come from the <b>maintenance / integrity system</b> and incidents from the <b>HSE incident system</b>, recorded by field and safety staff. This tab is read-only: to correct a record, fix it in that system. Whether an event must be reported to the regulator is decided by a qualified person; this tab only shows what the HSE system records. To add context, write a <b>note</b> on the well; for a value the systems don't carry, add a <b>custom field</b>.</span>
         <button class="btn sec" id="bfields" style="margin-left:auto">Custom fields (${D.custom_fields.length})</button></div>
       <div class="kpis six">
         <div class="kpi crit"><div class="n">${safeWells.filter(r => r.safety_worst === 'Critical').length}</div><div class="l">Wells with a critical safety flag</div></div>
@@ -407,7 +424,7 @@
         <div class="kpi warn"><div class="n">${overdue.length}</div><div class="l">Tests and inspections overdue</div></div>
         <div class="kpi"><div class="n">${soon.length}</div><div class="l">Due in the next 30 days</div></div>
         <div class="kpi crit"><div class="n">${open.length}</div><div class="l">Open safety events</div></div>
-        <div class="kpi crit"><div class="n">${events.filter(e => e.reportable && !e.reported_to_regulator).length}</div><div class="l">Reportable, not yet reported</div></div></div>
+        <div class="kpi crit"><div class="n">${events.filter(e => e.reportable && !e.reported_to_regulator).length}</div><div class="l">Flagged reportable, not yet reported</div></div></div>
       <div class="secgrid">
         <div class="card"><h4>Wells with safety flags <span class="muted small">${safeWells.length}</span></h4>
           ${tbl(['Well', 'Safety flags'], safeWells.map(r => `<tr><td><a class="lk" data-well="${r.well_id}">${r.well_id}</a><div class="muted small">${esc(r.fact.well_name)}</div></td>
@@ -694,23 +711,22 @@
     const missing = F.DEFAULT_RULES.filter(d => !RULES.some(r => r.id === d.id));
     $('#main').innerHTML = `<div class="bar"><button class="btn" id="newrule">+ New rule</button><button class="btn sec" id="lib">Rule library${missing.length ? ` (${missing.length} not in use)` : ''}</button><button class="btn sec" id="reset">Reset to defaults</button>
         <span style="margin-left:14px" class="note">Rank production problems by</span><div class="seg"><button data-m="value" class="${MODE === 'value' ? 'on' : ''}">$/day at risk</button><button data-m="payback" class="${MODE === 'payback' ? 'on' : ''}">Fastest payback</button><button data-m="score" class="${MODE === 'score' ? 'on' : ''}">Points</button></div></div>
-      <div class="bar"><label class="note" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="sf" ${SAFETY_FIRST ? 'checked' : ''}> Safety first (safety issues above everything else)</label>
+      <div class="bar"><span class="note"><b>Safety first, always:</b> wells with a Critical or Warning safety flag are listed above every production problem. This can't be turned off.</span>
         <label class="note" style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-left:14px"><input type="checkbox" id="woh" ${WO_HANDLED ? 'checked' : ''}> Treat wells with an open work order as being handled (production flags only)</label></div>
-      <div class="note" style="margin-bottom:8px">These are ${esc(engName())}'s rules${rulesSource === 'saved' ? ` (saved ${esc(String(D.saved_rules[ENG]?.saved_at || 'this session').slice(0, 16))})` : ' (defaults; not yet saved)'}. Wells are listed in tiers: ${SAFETY_FIRST ? 'safety first, then ' : ''}production and cost problems by ${SORT_LABEL()}, then a watch list. Points (the sum of rule weights, with rules in the same group counted once) break ties. Rules can look at well readings, at each test or inspection, or at each safety event. No AI decides a flag.</div>
+      <div class="note" style="margin-bottom:8px">These are ${esc(engName())}'s rules${rulesSource === 'saved' ? ` (saved ${esc(String(D.saved_rules[ENG]?.saved_at || 'this session').slice(0, 16))})` : ' (defaults; not yet saved)'}. Wells are listed in tiers: safety first, then production and cost problems by ${SORT_LABEL()}, then a watch list. The ${LOCKED.size} built-in safety rules are set by the operator and locked: always on, view and copy only. Every save is kept as a new version with who saved it. Points (the sum of rule weights, with rules in the same group counted once) break ties. Rules can look at well readings, at each test or inspection, or at each safety event. No AI decides a flag.</div>
       <div class="bar"><div class="filt">${cats.map(c => `<button data-cat="${esc(c)}" class="${ruleFilter === c ? 'on' : ''}">${esc(c)} ${c === 'All' ? RULES.length : RULES.filter(r => (r.category || 'Other') === c).length}</button>`).join('')}</div></div>
       <div class="card">${shown.map(([r, i]) => { const ds = r.dataset || 'well'; return `<div class="rule ${r.enabled ? '' : 'off'}">
-        <button class="switch ${r.enabled ? 'on' : ''}" data-i="${i}" title="${r.enabled ? 'Turn off' : 'Turn on'}"></button>
-        <div><div><span class="sev ${esc(r.severity)}" style="display:inline-block;margin-right:8px">${esc(r.severity)}</span>${F.isSafety(r) ? SAFETY_TAG : ''}<b>${esc(r.name)}</b> <span class="muted small">${esc(r.category || '')}</span><span class="ds">${esc(F.DATASETS[ds].label)}</span></div>
+        ${isLocked(r) ? `<button class="switch on locked" disabled aria-label="${esc(r.name)}: always on, locked" title="Built-in safety rule: always on"></button>` : `<button class="switch ${r.enabled ? 'on' : ''}" data-i="${i}" title="${r.enabled ? 'Turn off' : 'Turn on'}"></button>`}
+        <div><div><span class="sev ${esc(r.severity)}" style="display:inline-block;margin-right:8px">${esc(r.severity)}</span>${F.isSafety(r) ? SAFETY_TAG : ''}${isLocked(r) ? '<span class="pill">Locked</span> ' : ''}<b>${esc(r.name)}</b> <span class="muted small">${esc(r.category || '')}</span><span class="ds">${esc(F.DATASETS[ds].label)}</span></div>
           <div class="cond" style="margin-top:4px">${ds === 'well' ? 'When' : `When at least <b>${r.min_count || 1}</b> ${ds === 'test' ? 'test(s)' : 'event(s)'} have`} ${r.match === 'any' ? '<b>any</b>' : '<b>all</b>'} of: ${r.conditions.map(cn => condText(cn, ds)).join(' · ')}</div>
           <div class="muted small" style="margin-top:2px">Flags ${counts[r.id] || 0} of your wells now${r.group ? ` · group: ${esc(r.group)} (counted once)` : ''}${r.fix_cost ? ` · typical fix ≈ $${fmt(r.fix_cost)}` : ''}</div></div>
-        <div style="display:flex;gap:10px;align-items:start"><div class="wt">${r.weight}<small>points</small></div><button class="btn sec small" data-edit="${i}">Edit</button><button class="btn sec small" data-dup="${i}">Copy</button></div></div>`; }).join('')}</div>`;
-    document.querySelectorAll('.switch').forEach(b => b.onclick = async () => { const r = RULES[+b.dataset.i]; r.enabled = !r.enabled; await persist(`${r.name} turned ${r.enabled ? 'on' : 'off'}`); });
+        <div style="display:flex;gap:10px;align-items:start"><div class="wt">${r.weight}<small>points</small></div><button class="btn sec small" data-edit="${i}">${isLocked(r) ? 'View' : 'Edit'}</button><button class="btn sec small" data-dup="${i}">Copy</button></div></div>`; }).join('')}</div>`;
+    document.querySelectorAll('.switch[data-i]').forEach(b => b.onclick = async () => { const r = RULES[+b.dataset.i]; if (isLocked(r)) return; r.enabled = !r.enabled; await persist(`${r.name} turned ${r.enabled ? 'on' : 'off'}`); });
     document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editRule(+b.dataset.edit));
     document.querySelectorAll('[data-dup]').forEach(b => b.onclick = () => { const cp = clone(RULES[+b.dataset.dup]); cp.id = 'CUSTOM_' + Date.now(); cp.name += ' (copy)'; editRule(null, cp); });
     document.querySelectorAll('[data-m]').forEach(b => b.onclick = async () => { MODE = b.dataset.m; await persist('Production problems ranked by ' + SORT_LABEL()); });
     $('#woh').onchange = async e => { WO_HANDLED = e.target.checked; await persist(WO_HANDLED ? 'Open work orders count as being handled' : 'Open work orders no longer hide flags'); };
     document.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { ruleFilter = b.dataset.cat; renderRules(); });
-    $('#sf').onchange = async e => { SAFETY_FIRST = e.target.checked; await persist(SAFETY_FIRST ? 'Safety flags rank first' : 'Safety flags ranked by score like the rest'); };
     $('#newrule').onclick = () => editRule(null);
     $('#lib').onclick = library;
     $('#reset').onclick = async () => { RULES = clone(F.DEFAULT_RULES); MODE = 'value'; SAFETY_FIRST = true; WO_HANDLED = false; await persist('Rules reset to defaults'); };
@@ -729,13 +745,15 @@
   async function persist(msg) {
     recompute(); render();
     try { const r = await post('api/rules/' + ENG, {rules: RULES, mode: MODE, safety_first: SAFETY_FIRST, wo_handled: WO_HANDLED}, 'PUT');
-      D.saved_rules[ENG] = {rules: clone(RULES), mode: MODE, saved_by: r.saved_by, saved_at: new Date().toISOString().replace('T', ' ')}; D.settings[ENG] = {safety_first: SAFETY_FIRST, wo_handled: WO_HANDLED}; rulesSource = 'saved'; toast(msg + ' · saved'); render();
+      D.saved_rules[ENG] = {rules: clone(RULES), mode: MODE, saved_by: r.saved_by, saved_at: new Date().toISOString().replace('T', ' ')}; D.settings[ENG] = {safety_first: true, wo_handled: WO_HANDLED}; rulesSource = 'saved';
+      if ((r.restored_safety_rules || []).length) { RULES = restoreLocked(RULES); D.saved_rules[ENG].rules = clone(RULES); recompute(); toast('Saved. Built-in safety rules kept as shipped: ' + r.restored_safety_rules.join(', ')); } else toast(msg + ' · saved');
+      render();
     } catch (e) { toast('Could not save: ' + e.message); }
   }
   function toast(t) { const el = document.createElement('div'); el.className = 'toast' + (/^Could not|failed/i.test(t) ? ' err' : ''); el.setAttribute('role', 'status'); el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 3500); }
 
   function editRule(i, preset) {
-    const isNew = i === null;
+    const isNew = i === null, locked = !isNew && isLocked(RULES[i]);
     const r = preset || (isNew ? {id: 'CUSTOM_' + Date.now(), name: '', severity: 'Warning', weight: 20, category: 'Safety', enabled: true, match: 'all', dataset: 'well',
       conditions: [{field: 'casing_pct_of_maasp', op: 'gte', value: 70}], message: '', action: ''} : clone(RULES[i]));
     r.dataset = r.dataset || 'well';
@@ -771,7 +789,12 @@
         <textarea id="e-msg">${esc(r.message)}</textarea>
         <label>Suggested next step</label><textarea id="e-act">${esc(r.action)}</textarea>
         <div class="preview" id="e-prev"></div><div class="errs" id="e-err"></div>
-        <div style="display:flex;gap:8px;margin-top:14px"><button class="btn" id="e-save">Save rule</button>${isNew ? '' : '<button class="btn danger" id="e-delrule">Delete rule</button>'}</div></div>`;
+        <div style="display:flex;gap:8px;margin-top:14px">${locked ? '' : `<button class="btn" id="e-save">Save rule</button>${isNew ? '' : '<button class="btn danger" id="e-delrule">Delete rule</button>'}`}</div></div>`;
+      if (locked) {
+        $('#edbox').querySelectorAll('input, select, textarea, button:not(#edx)').forEach(el => { el.disabled = true; });
+        $('#edbox').querySelector('h2').textContent = 'Built-in safety rule';
+        $('#edbox').querySelector('h2').parentElement.insertAdjacentHTML('afterend', '<div class="note" style="font-weight:600;margin:8px 0">This safety rule is set by the operator. It is always on and can\'t be changed or deleted here. Use Copy on the rule list to make a stricter version of your own.</div>');
+      }
       const sync = () => {
         r.name = $('#e-name').value; r.severity = $('#e-sev').value; r.category = $('#e-cat').value; r.match = $('#e-match').value;
         r.weight = $('#e-wt').value === '' || isNaN(Number($('#e-wt').value)) ? $('#e-wt').value : Number($('#e-wt').value);
@@ -802,9 +825,9 @@
       document.querySelectorAll('.c-del').forEach(b => b.onclick = () => { sync(); r.conditions.splice(+b.closest('.crow').dataset.k, 1); draw(); });
       $('#e-add').onclick = () => { sync(); const f0 = F.DATASETS[r.dataset].fields[0]; r.conditions.push({field: f0.field, op: F.OPS[f0.type][0][0], value: ''}); draw(); };
       $('#edx').onclick = () => $('#editor').hidden = true;
-      $('#e-save').onclick = async () => { sync(); const errs = F.validateRule(r); if (errs.length) { $('#e-err').textContent = errs.join(' '); return; }
+      if (!locked) $('#e-save').onclick = async () => { sync(); const errs = F.validateRule(r); if (errs.length) { $('#e-err').textContent = errs.join(' '); return; }
         if (isNew) RULES.push(r); else RULES[i] = r; $('#editor').hidden = true; await persist(`Rule "${r.name}" saved`); };
-      if (!isNew) $('#e-delrule').onclick = async () => { const name = RULES[i].name; RULES.splice(i, 1); $('#editor').hidden = true; await persist(`Rule "${name}" deleted`); };
+      if (!isNew && !locked) $('#e-delrule').onclick = async () => { const name = RULES[i].name; RULES.splice(i, 1); $('#editor').hidden = true; await persist(`Rule "${name}" deleted`); };
       preview();
     };
     draw(); $('#editor').hidden = false;
@@ -839,6 +862,245 @@
     b.innerHTML = `${ic('alert')} <span><b>Demo:</b> simulated SCADA reading on <b>${SIM.well_id}</b>, production casing ${fmt(SIM.values.casing_psi_max_7d)} psi (94% of MAASP). Real data is unchanged.</span><button class="btn sec small" id="simclear" style="margin-left:auto">Clear simulation</button>`;
     $('#simclear').onclick = () => clearSim();
   }
+  // ---------------- Safety incidents: report, make safe, notify, investigate, close ----------------
+  // Safety always comes first. People move an incident on; the app and the AI never close, downgrade or delay one.
+  // Notifications are simulated in this demo (recorded, not sent). The audit trail is insert-only.
+  let INC = null, incErr = null, incTimer = null;
+  const INC_STATES = ['Reported', 'Made Safe', 'Notified', 'Under Investigation', 'Corrective Actions Open', 'Closed'];
+  const tsLocal = v => { if (!v) return ''; const d = new Date(String(v).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(v)) ? '' : 'Z')); return isNaN(d) ? String(v) : d.toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}); };
+  const agoMin = v => { const d = new Date(String(v).replace(' ', 'T') + (/[zZ]$/.test(String(v)) ? '' : 'Z')); return Math.max(0, Math.round((Date.now() - d) / 60000)); };
+  const agoText = v => { const m = agoMin(v); return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+  async function loadIncidents() {
+    try { INC = await api('api/incidents'); incErr = null; } catch (e) { incErr = e.message; }
+    const open = (INC ? INC.incidents : []).filter(i => i.state !== 'Closed'), waiting = open.filter(i => !i.acknowledged);
+    const c = $('#c-inc'); if (c) { c.textContent = open.length || ''; c.classList.toggle('alarm', waiting.length > 0); c.title = waiting.length ? `${waiting.length} not acknowledged yet` : ''; }
+  }
+  // While the tab is open, check every minute: that is also when an overdue escalation goes out.
+  function watchIncidents(on) {
+    clearInterval(incTimer); incTimer = null;
+    if (on) incTimer = setInterval(async () => { await loadIncidents(); if (view === 'incidents' && $('#modal').hidden) renderIncidents(); }, 60000);
+  }
+  const incPill = s => `<span class="pill ${s === 'Closed' ? 'ok' : s === 'Reported' ? 'crit' : 'warn'}">${esc(s)}</span>`;
+  const stepsBar = s => `<ol class="incsteps">${INC_STATES.map((x, k) => `<li class="${k < INC_STATES.indexOf(s) ? 'done' : k === INC_STATES.indexOf(s) ? 'now' : ''}">${esc(x)}</li>`).join('')}</ol>`;
+
+  function emergencyBox(info, compact) {
+    const people = (info && info.contacts) || [];
+    return `<div class="emerg" role="note"><b>${ic('alert')} Safety first</b>
+      <ul><li><b>If anyone is hurt, there is a fire, or a release you can't control: call 911 now.</b></li>
+        <li>Stop the work if it is unsafe. Anyone can stop work (Stop Work Authority).</li>
+        ${compact ? '' : '<li>Make the area safe only if you can do it without putting yourself or others at risk. Move upwind of any gas.</li>'}
+        <li>Company emergency line: <a href="tel:${esc((info && info.emergency_line) || '')}">${esc((info && info.emergency_line) || '')}</a>${people.map(p => ` · ${esc(p.role)} ${esc(p.name)}: <a href="tel:${esc(p.mobile || '')}">${esc(p.mobile || '')}</a>`).join('')}</li></ul>
+      <div class="muted small">This app guides you; it doesn't replace your emergency response plan.</div></div>`;
+  }
+
+  async function reportIncident(pre = {}) {
+    const wells = D.snapshot.slice().sort((a, b) => (b.engineer_id === ENG) - (a.engineer_id === ENG) || a.well_id.localeCompare(b.well_id));
+    let well = pre.well_id || (myWells()[0] || wells[0]).well_id, info = null;
+    const step1 = async () => {
+      try { info = await api('api/incidents/emergency/' + well); } catch (e) { info = {emergency_line: (INC && INC.emergency_line) || '', contacts: []}; }
+      showModal(`<div class="mhead"><h2>Report a safety issue</h2><button class="btn sec close" id="mx">Cancel</button></div><div class="mbody">
+        ${emergencyBox(info)}
+        <div class="frm" style="grid-template-columns:1fr"><div><label>Where</label><select id="r-well">${wells.map(w => `<option value="${w.well_id}" ${w.well_id === well ? 'selected' : ''}>${w.well_id} · ${esc(w.well_name)} · ${esc(w.area)}${w.engineer_id === ENG ? '' : ' (not your well)'}</option>`).join('')}</select></div></div>
+        <div style="margin-top:14px;display:flex;gap:8px"><button class="btn" id="r-next">Continue to the report</button></div></div>`);
+      $('#r-well').onchange = async e => { well = e.target.value; await step1(); };
+      $('#r-next').onclick = step2;
+    };
+    const step2 = () => {
+      const sr = window.SpeechRecognition || window.webkitSpeechRecognition;
+      showModal(`<div class="mhead"><h2>Report a safety issue · ${esc(well)}</h2><button class="btn sec close" id="mx">Cancel</button></div><div class="mbody">
+        ${emergencyBox(info, true)}
+        <div class="frm">
+          <div><label>What kind of issue</label><select id="r-cat">${INC.categories.map(c => `<option ${c === pre.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+          <div><label>Is anyone hurt?</label><div class="seg" id="r-hurt" role="radiogroup">${['Yes', 'No', 'Unknown'].map(h => `<button type="button" role="radio" data-h="${h}" class="${h === 'Unknown' ? 'on' : ''}" aria-checked="${h === 'Unknown'}">${h}</button>`).join('')}</div></div>
+          <div class="full"><label>What happened, in your own words${sr ? ' (type or dictate)' : ''}</label><textarea id="r-text" placeholder="e.g. Rotten-egg smell at the wellhead, my personal monitor alarmed at 15 ppm, we backed off upwind and stopped work">${esc(pre.text || '')}</textarea>
+            ${sr ? '<button type="button" class="btn sec small" id="r-mic" style="margin-top:6px">Dictate</button> <span class="muted small" id="r-micnote"></span>' : ''}</div>
+          <div><label>Substance, if known <span class="muted" style="font-weight:400">· optional</span></label><input id="r-sub" placeholder="e.g. sour gas, produced water, crude oil"></div>
+          <div><label>Estimated volume, m3 <span class="muted" style="font-weight:400">· optional</span></label><input id="r-vol" inputmode="decimal"></div>
+        </div>
+        <div class="note">Sending notifies the on-call chain for this area at once: the field foreman and HSE advisor. If nobody acknowledges, it escalates automatically. In this demo the notifications are recorded, not actually sent.</div>
+        <div class="errs" id="ferr"></div>
+        <div style="margin-top:14px;display:flex;gap:8px"><button class="btn danger-solid" id="r-send">${ic('alert')} Send report</button><button class="btn sec" id="r-back">Back</button></div></div>`);
+      let hurt = 'Unknown';
+      document.querySelectorAll('[data-h]').forEach(b => b.onclick = () => { hurt = b.dataset.h; document.querySelectorAll('[data-h]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); }); });
+      $('#r-back').onclick = step1;
+      if (sr && $('#r-mic')) {
+        let rec = null;
+        $('#r-mic').onclick = () => {
+          if (rec) { rec.stop(); return; }
+          rec = new sr(); rec.lang = 'en-US'; rec.interimResults = false; rec.continuous = true;
+          const before = $('#r-text').value;
+          rec.onresult = ev => { $('#r-text').value = (before ? before + ' ' : '') + [...ev.results].map(r => r[0].transcript).join(' '); };
+          rec.onend = () => { rec = null; $('#r-mic').textContent = 'Dictate'; $('#r-micnote').textContent = 'Check the text before sending.'; };
+          rec.onerror = ev => { $('#r-micnote').textContent = 'Dictation stopped: ' + ev.error; };
+          rec.start(); $('#r-mic').textContent = 'Stop dictating'; $('#r-micnote').textContent = 'Listening…';
+        };
+      }
+      $('#r-send').onclick = async () => {
+        $('#r-send').disabled = true;
+        try {
+          const res = await post('api/incidents', {well_id: well, category: $('#r-cat').value, what_happened: $('#r-text').value, people_hurt: hurt,
+            substance: $('#r-sub').value, volume_m3: $('#r-vol').value, source_rule_id: pre.source_rule_id || null});
+          await loadIncidents();
+          showModal(`<div class="mhead"><h2>Report sent · ${esc(res.incident_id)}</h2><button class="btn sec close" id="mx">Close</button></div><div class="mbody">
+            <div class="note" style="font-weight:600">Alert sent to: ${res.notified.length ? res.notified.map(esc).join('; ') : 'nobody: no on-call contacts found for this area. Call the emergency line.'}</div>
+            <div class="note">Simulated in this demo: recorded with the time and channel, not actually sent. If nobody acknowledges, it escalates on its own.</div>
+            <div style="margin-top:14px;display:flex;gap:8px"><button class="btn" id="r-open">Open the incident</button></div></div>`);
+          $('#r-open').onclick = () => openIncident(res.incident_id);
+          if (view === 'incidents') renderIncidents();
+        } catch (e) { $('#ferr').textContent = e.message; $('#r-send').disabled = false; }
+      };
+    };
+    if (!INC) await loadIncidents();
+    if (!INC) { toast('Could not load the incident setup: ' + (incErr || '') + '. Call the emergency line if this is urgent.'); return; }
+    await step1();
+  }
+
+  function renderIncidents() {
+    if (!INC) {
+      $('#main').innerHTML = incErr ? `<div class="errcard"><b>Couldn't load safety incidents.</b><div>${esc(incErr)}</div><button class="btn" id="incretry">Try again</button></div>` : '<div class="card" style="padding:20px"><span class="skel" style="height:16px;width:60%;margin:10px 0"></span><span class="skel" style="height:16px;width:80%;margin:10px 0"></span></div>';
+      if ($('#incretry')) $('#incretry').onclick = async () => { await loadIncidents(); renderIncidents(); };
+      if (!incErr) loadIncidents().then(renderIncidents);
+      return;
+    }
+    const all = INC.incidents, open = all.filter(i => i.state !== 'Closed'), closed = all.filter(i => i.state === 'Closed');
+    const waiting = open.filter(i => !i.acknowledged), acts = open.flatMap(i => i.actions.filter(a => a.status !== 'Done'));
+    const late = acts.filter(a => String(a.due_date) < D.today);
+    const chain = INC.oncall, steps = [...new Set(chain.map(c => c.step))];
+    const card = i => `<div class="inccard ${i.state === 'Closed' ? 'closed' : ''}" data-inc="${esc(i.incident_id)}" tabindex="0" role="button" aria-label="Open ${esc(i.incident_id)}">
+      <div class="inchead"><b>${esc(i.incident_id)}</b> ${incPill(i.state)} <span>${esc(i.category)}</span> · <a class="lk" data-well="${esc(i.well_id)}">${esc(i.well_id)}</a> <span class="muted">${esc(i.area || '')}</span>
+        <span class="muted small" style="margin-left:auto">reported ${esc(agoText(i.reported_at))} by ${esc(i.reported_by)}</span></div>
+      <div class="incwhat">${esc(i.what_happened)}</div>
+      <div class="small">${i.state === 'Closed' ? '' : i.acknowledged ? `<span class="pill ok">${ic('check')} Acknowledged</span>` : `<span class="pill crit">${ic('alert')} Not acknowledged yet</span>${i.next_escalation ? ` <span class="muted">escalates to ${esc(i.next_escalation.roles.join(' and '))} at ${esc(tsLocal(i.next_escalation.at))}</span>` : ''}`}
+        ${i.people_hurt === 'Yes' ? ' <span class="pill crit">Someone hurt</span>' : ''}
+        ${i.actions.length ? ` <span class="muted">· ${i.actions.filter(a => a.status !== 'Done').length} of ${i.actions.length} actions open</span>` : ''}</div></div>`;
+    $('#main').innerHTML = `
+      <div class="bar"><button class="btn danger-solid" id="increport">${ic('alert')} Report safety issue</button>
+        <span class="note" style="margin-left:8px">Safety issues always come first. The app notifies the on-call chain and keeps the record; people decide every step.</span></div>
+      <div class="kpis">
+        <div class="kpi ${open.length ? 'warn' : ''}"><div class="n">${open.length}</div><div class="l">Open incidents</div></div>
+        <div class="kpi ${waiting.length ? 'kpi-alert' : ''}"><div class="n">${waiting.length}</div><div class="l">Not acknowledged yet</div></div>
+        <div class="kpi"><div class="n">${acts.length}</div><div class="l">Corrective actions open</div></div>
+        <div class="kpi ${late.length ? 'crit' : ''}"><div class="n">${late.length}</div><div class="l">Actions past due</div></div></div>
+      <div class="card" style="padding:14px 18px;margin-bottom:12px"><b>On-call chain</b> <span class="muted small">· from <a class="lk" href="${esc(tableUrl(SCH() + '.gold_incident_oncall'))}" target="_blank" rel="noopener">gold_incident_oncall</a>, set by operations</span>
+        <div class="small" style="margin-top:4px">${steps.map(s => { const c = chain.filter(x => x.step === s); return `<div>${c[0].after_minutes ? `After ${c[0].after_minutes} min with no acknowledgement` : 'At once'}: ${c.map(x => `${esc(x.role)} (${esc(x.channels.replace(/,/g, ', '))})`).join(', ')}</div>`; }).join('')}</div>
+        <div class="muted small" style="margin-top:4px">Demo: notifications are recorded with who, when and which channel, not actually sent. Escalations go out when the app next checks, at least once a minute while this tab is open.</div></div>
+      <h3 style="margin:16px 0 8px">Open <span class="muted small">${open.length}</span></h3>
+      ${open.length ? open.map(card).join('') : '<div class="card" style="padding:16px">No open safety incidents. Use <b>Report safety issue</b> to raise one: it takes a few taps.</div>'}
+      ${closed.length ? `<details style="margin-top:16px"><summary><b>Closed</b> <span class="muted small">${closed.length}</span></summary>${closed.map(card).join('')}</details>` : ''}`;
+    $('#increport').onclick = () => reportIncident();
+    document.querySelectorAll('[data-inc]').forEach(c => { const open1 = e => { if (e.target.closest('[data-well]')) return; openIncident(c.dataset.inc); };
+      c.onclick = open1; c.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open1(e); } }; });
+    bindCommon($('#main'));
+  }
+
+  async function openIncident(id, keep = {}) {
+    if (!INC || !INC.incidents.some(i => i.incident_id === id)) await loadIncidents();
+    const i = INC && INC.incidents.find(x => x.incident_id === id);
+    if (!i) { toast('Could not find ' + id); return; }
+    const s = i.state, k = INC_STATES.indexOf(s), doneActs = i.actions.every(a => a.status === 'Done');
+    const next = s === 'Closed' ? null : INC_STATES[k + 1];
+    const nextForm = {
+      'Made Safe': `<label>What was done to make the area safe</label><textarea id="t-note" placeholder="e.g. Well shut in at the wellhead, area barricaded, H2S monitor reading 0 ppm at the lease edge"></textarea>`,
+      'Notified': i.acknowledged ? '<div class="note">The on-call chain has acknowledged. Confirm that everyone who needs to know has been told.</div><label>Note (optional)</label><textarea id="t-note"></textarea>'
+        : '<div class="note" style="font-weight:600">Waiting for someone in the on-call chain to acknowledge the alert (see Notifications below).</div>',
+      'Under Investigation': `<label>Who is leading the investigation</label><input id="t-lead" placeholder="e.g. Amara Okafor (HSE advisor)">`,
+      'Corrective Actions Open': `<label>Root cause found by the investigation</label><textarea id="t-rc"></textarea>${i.actions.length ? '' : '<div class="note" style="font-weight:600">Add at least one corrective action below first.</div>'}`,
+      'Closed': `${doneActs ? '' : '<div class="note" style="font-weight:600">Every corrective action must be done before closing.</div>'}<label>Closing note</label><textarea id="t-note"></textarea>`,
+    }[next];
+    const canNext = next && !(next === 'Notified' && !i.acknowledged) && !(next === 'Corrective Actions Open' && !i.actions.length) && !(next === 'Closed' && !doneActs);
+    const prompts = i.reporting_prompts;
+    showModal(`<div class="mhead"><h2>${esc(i.incident_id)} · ${esc(i.category)} · ${esc(i.well_id)}</h2><button class="btn sec close" id="mx">Close</button></div><div class="mbody">
+      ${stepsBar(s)}
+      ${s === 'Reported' ? emergencyBox({emergency_line: INC.emergency_line, contacts: []}, true) : ''}
+      <div class="incgrid"><div>
+        <h3>Next step</h3>
+        ${next ? `<div class="card incnext" style="padding:12px 14px"><b>${esc(next)}</b>${nextForm}<div class="errs" id="t-err"></div>
+            <button class="btn" id="t-go" ${canNext ? '' : 'disabled'} style="margin-top:8px">Move to ${esc(next)}</button></div>`
+          : `<div class="card" style="padding:12px 14px">Closed by ${esc(i.updated_by)} · ${esc(i.closing_note || '')}<div style="margin-top:8px"><button class="btn sec" id="t-reopen">Reopen for investigation</button></div></div>`}
+        <h3>What was reported</h3>
+        <div class="incfacts">
+          <div><span>In the reporter's words</span>${esc(i.what_happened)}</div>
+          <div><span>Anyone hurt</span>${esc(i.people_hurt)}</div>
+          <div><span>Where</span>${esc(i.location || i.well_id)}</div>
+          <div><span>When</span>${esc(tsLocal(i.occurred_at))}</div>
+          <div><span>Substance</span>${esc(i.substance || '')}</div>
+          <div><span>Volume</span>${i.volume_m3 !== null && i.volume_m3 !== undefined ? esc(fmt(i.volume_m3, 1)) + ' m3' : ''}</div>
+          <div><span>Reported by</span>${esc(i.reported_by)} · ${esc(tsLocal(i.reported_at))}</div>
+          ${i.source_rule_id ? `<div><span>Raised from flag</span>${esc((RULES.find(r => r.id === i.source_rule_id) || {}).name || i.source_rule_id)}</div>` : ''}
+          ${i.made_safe_note ? `<div><span>Made safe</span>${esc(i.made_safe_note)}</div>` : ''}
+          ${i.investigation_lead ? `<div><span>Investigation lead</span>${esc(i.investigation_lead)}</div>` : ''}
+          ${i.root_cause ? `<div><span>Root cause</span>${esc(i.root_cause)}</div>` : ''}
+        </div>
+        <div style="margin-top:10px"><button class="btn sec small" id="ai-go">${ic('flag')} Structure this report with AI</button> <span class="muted small">Suggests fields from the reporter's words, each with the words it came from. Nothing changes until you accept.</span></div>
+        <div id="ai-box"></div>
+        <h3>Regulatory reporting</h3>
+        <div class="card" style="padding:12px 14px">
+          ${prompts.length ? prompts.map(p => `<div style="margin-bottom:8px">${ic('alert')} <b>A report to the regulator may be required.</b> ${esc(p.text)} <span class="muted">Decided by the ${esc(p.decided_by_role.toLowerCase())}.</span></div>`).join('')
+            : '<div style="margin-bottom:8px">No reporting prompt matched the configured rules. That does not mean no report is needed: the regulatory coordinator decides.</div>'}
+          <div class="muted small">Prompts come from <a class="lk" href="${esc(tableUrl(SCH() + '.gold_reporting_prompts'))}" target="_blank" rel="noopener">gold_reporting_prompts</a> (demo examples, not legal advice). The app never decides whether to report.</div>
+          ${i.regulatory_decision ? `<div style="margin-top:8px"><b>Decision recorded:</b> ${esc(i.regulatory_decision)} <span class="muted">(${esc(i.regulatory_decided_by)})</span></div>` : ''}
+          <details style="margin-top:8px"><summary class="lk">Record the decision (qualified person)</summary>
+            <div class="frm"><div><label>Decision</label><select id="rg-d"><option>Still deciding</option><option>Report made to the regulator</option><option>Decided no report needed</option></select></div>
+              <div><label>Decided by</label><input id="rg-by" placeholder="Name and role"></div><div class="full"><label>Reason or reference</label><textarea id="rg-why"></textarea></div></div>
+            <div class="errs" id="rg-err"></div><button class="btn sec" id="rg-save">Record decision</button></details></div>
+      </div><div>
+        <h3>Notifications</h3>
+        ${i.next_escalation ? `<div class="note" style="font-weight:600">${ic('alert')} Not acknowledged yet. Escalates to ${esc(i.next_escalation.roles.join(' and '))} at ${esc(tsLocal(i.next_escalation.at))}.</div>` : ''}
+        <table class="small"><thead><tr><th>Who</th><th>Channel</th><th>Sent</th><th>Status</th></tr></thead><tbody>
+          ${i.notifications.map(n => `<tr><td><b>${esc(n.person)}</b><div class="muted">${esc(n.role)} · step ${n.step}</div></td><td>${esc(String(n.channels).replace(/,/g, ', '))}</td><td>${esc(tsLocal(n.sent_at))}</td>
+            <td>${n.status === 'Acknowledged' ? `<span class="pill ok">${ic('check')} ${esc(tsLocal(n.acknowledged_at))}</span>` : `<button class="btn sec small" data-ack-n="${esc(n.notification_id)}" title="In production the person taps Acknowledge on their phone">Record acknowledgement</button>`}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No one was notified: no on-call contacts for this area.</td></tr>'}
+        </tbody></table>
+        <div class="muted small">Simulated: recorded with the time and channel, not actually sent.</div>
+        <h3>Corrective actions</h3>
+        ${i.actions.length ? `<table class="small"><tbody>${i.actions.map(a => `<tr><td>${a.status === 'Done' ? ic('check') : ''} <b>${esc(a.description)}</b><div class="muted">${esc(a.owner)} · due ${esc(String(a.due_date))}${a.status !== 'Done' && String(a.due_date) < D.today ? ' <span class="pill crit">past due</span>' : ''}${a.done_note ? ' · ' + esc(a.done_note) : ''}</div></td>
+          <td style="white-space:nowrap">${a.status === 'Done' ? '<span class="pill ok">Done</span>' : `<button class="btn sec small" data-act-done="${esc(a.action_id)}">Mark done</button>`}</td></tr>`).join('')}</tbody></table>` : '<div class="muted small">None yet.</div>'}
+        ${s !== 'Closed' ? `<details style="margin-top:6px"><summary class="lk">Add a corrective action</summary><div class="frm"><div class="full"><label>What will be done</label><input id="ca-d"></div><div><label>Owner</label><input id="ca-o"></div><div><label>Due</label><input id="ca-due" type="date" min="${D.today}"></div></div><div class="errs" id="ca-err"></div><button class="btn sec" id="ca-add">Add action</button></details>` : ''}
+        <h3>Timeline</h3>
+        <ol class="inctl">${i.events.map(e => `<li><span class="muted">${esc(tsLocal(e.at))}</span> <b>${esc(e.action)}</b>${e.to_state && e.from_state ? ` <span class="muted">${esc(e.from_state)} → ${esc(e.to_state)}</span>` : ''} · <span class="muted">${esc(e.actor)}</span>${e.detail ? `<div>${esc(e.detail)}</div>` : ''}</li>`).join('')}</ol>
+        <div class="muted small">Insert-only audit trail (<a class="lk" href="${esc(tableUrl(SCH() + '.app_incident_events'))}" target="_blank" rel="noopener">app_incident_events</a>): entries are never edited or deleted.</div>
+        <div class="frm" style="grid-template-columns:1fr;margin-top:8px"><div><label>Add a note to the timeline</label><textarea id="in-note" style="min-height:60px"></textarea></div></div><button class="btn sec small" id="in-add">Add note</button>
+      </div></div></div>`);
+    const again = async (msg) => { await loadIncidents(); if (view === 'incidents') renderIncidents(); await openIncident(id); if (msg) toast(msg); };
+    const run = async (btn, errEl, fn, msg) => { btn.disabled = true; try { await fn(); await again(msg); } catch (e) { $(errEl).textContent = e.message; btn.disabled = false; } };
+    if ($('#t-go')) $('#t-go').onclick = () => run($('#t-go'), '#t-err', () => post(`api/incidents/${id}/transition`, {to: next, note: val('t-note'), investigation_lead: val('t-lead'), root_cause: val('t-rc')}), `Moved to ${next}`);
+    if ($('#t-reopen')) $('#t-reopen').onclick = () => run($('#t-reopen'), '#t-err', () => post(`api/incidents/${id}/transition`, {to: 'Under Investigation', note: 'Reopened'}), 'Reopened');
+    document.querySelectorAll('[data-ack-n]').forEach(b => b.onclick = () => run(b, '#t-err', () => post(`api/incidents/${id}/acknowledge`, {notification_id: b.dataset.ackN}), 'Acknowledgement recorded'));
+    document.querySelectorAll('[data-act-done]').forEach(b => b.onclick = () => {
+      const aid = b.dataset.actDone, cell = b.parentElement;
+      cell.innerHTML = `<input id="cd-${aid}" placeholder="How was it done?" style="min-width:180px"> <button class="btn sec small" id="cs-${aid}">Save</button>`;
+      $('#cd-' + aid).focus();
+      $('#cs-' + aid).onclick = () => run($('#cs-' + aid), '#ca-err', () => post(`api/incidents/${id}/actions/${aid}`, {status: 'Done', note: val('cd-' + aid)}), 'Action marked done');
+    });
+    if ($('#ca-add')) $('#ca-add').onclick = () => run($('#ca-add'), '#ca-err', () => post(`api/incidents/${id}/actions`, {description: val('ca-d'), owner: val('ca-o'), due_date: val('ca-due')}), 'Corrective action added');
+    $('#in-add').onclick = () => run($('#in-add'), '#t-err', () => post(`api/incidents/${id}/notes`, {text: val('in-note')}), 'Note added');
+    $('#rg-save').onclick = () => run($('#rg-save'), '#rg-err', () => post(`api/incidents/${id}/regulatory`, {decision: val('rg-d'), decided_by: val('rg-by'), reason: val('rg-why')}), 'Decision recorded');
+    $('#ai-go').onclick = async () => {
+      $('#ai-go').disabled = true; $('#ai-box').innerHTML = '<div class="working" style="margin-top:8px">The AI is reading the report…</div>';
+      let sug;
+      try { sug = await post(`api/incidents/${id}/structure`, {}); }
+      catch (e) { $('#ai-box').innerHTML = `<div class="errcard"><b>The AI couldn't structure this report.</b><div>${esc(e.message)}</div></div>`; $('#ai-go').disabled = false; return; }
+      const f = sug.fields, lab = {what: 'What happened', where: 'Where', when: 'When', who_involved: 'Who was involved', substance: 'Substance', volume_m3: 'Volume, m3', people_hurt: 'Anyone hurt'};
+      $('#ai-box').innerHTML = `<div class="card aibox" style="padding:12px 14px;margin-top:8px"><b>AI suggestion</b> <span class="pill warn">not applied yet</span> <span class="muted small">${esc(sug.model || '')}${sug.secs ? ', ' + sug.secs + ' s' : ''}</span>
+        <table class="small" style="margin-top:6px"><thead><tr><th>Field</th><th>Suggested</th><th>From the reporter's words</th></tr></thead><tbody>
+        ${Object.entries(lab).filter(([k]) => f[k] !== undefined).map(([k, l]) => { const v = typeof f[k] === 'object' ? f[k].value : f[k], q = typeof f[k] === 'object' ? f[k].quote : '';
+          const edit = k === 'substance' ? `<input id="ai-substance" value="${esc(v ?? '')}">` : k === 'volume_m3' ? `<input id="ai-volume" value="${esc(v ?? '')}" inputmode="decimal">` : k === 'people_hurt' ? `<select id="ai-hurt">${['Yes', 'No', 'Unknown'].map(h => `<option ${h === v ? 'selected' : ''}>${h}</option>`).join('')}</select>` : esc(v);
+          return `<tr><td>${esc(l)}</td><td>${edit}</td><td class="muted">${q ? '“' + esc(q) + '”' : (k === 'people_hurt' ? 'Not stated' : '')}</td></tr>`; }).join('')}</tbody></table>
+        ${sug.timeline.length ? `<div class="small" style="margin-top:6px"><b>Timeline the AI read in the text</b><ol>${sug.timeline.map(t => `<li>${t.time ? esc(t.time) + ': ' : ''}${esc(t.event)}</li>`).join('')}</ol></div>` : ''}
+        ${sug.missing.length ? `<div class="small"><b>Not in the report yet</b> (ask the reporter): ${sug.missing.map(esc).join('; ')}</div>` : ''}
+        ${sug.dropped.length ? `<div class="muted small">Left out because the text didn't support them: ${sug.dropped.map(d => esc(lab[d] || d)).join(', ')}.</div>` : ''}
+        <div class="muted small">AI inference from the report text only. Only substance, volume and anyone hurt are saved to the record; the rest is for reference. Your choice is logged.</div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn sec small" data-ai="accepted">Accept</button><button class="btn sec small" data-ai="edited">Save with my edits</button><button class="btn sec small" data-ai="rejected">Reject</button></div><div class="errs" id="ai-err"></div></div>`;
+      const orig = {substance: f.substance ? f.substance.value : '', volume_m3: f.volume_m3 ? f.volume_m3.value : '', people_hurt: f.people_hurt ? (f.people_hurt.value || f.people_hurt) : 'Unknown'};
+      document.querySelectorAll('[data-ai]').forEach(b => b.onclick = () => {
+        const cur = {substance: val('ai-substance') ?? orig.substance, volume_m3: val('ai-volume') ?? orig.volume_m3, people_hurt: val('ai-hurt') ?? orig.people_hurt};
+        const fields = b.dataset.ai === 'accepted' ? orig : b.dataset.ai === 'edited' ? cur : {};
+        const summary = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, typeof v === 'object' ? v.value : v]));
+        run(b, '#ai-err', () => post(`api/incidents/${id}/structure/decision`, {decision: b.dataset.ai, fields, summary}), `AI suggestion ${b.dataset.ai}`);
+      });
+    };
+    if (keep.scroll) $('#mbox').scrollTop = keep.scroll;
+  }
+
   function renderAlerts() {
     const need = needsAlert(), tasks = myTasks(), open = tasks.filter(t => t.status === 'Open');
     const late = open.filter(t => String(t.due_date) < D.today), done = tasks.filter(t => t.status === 'Done');
@@ -899,7 +1161,7 @@
       $('.working').remove(); $('#aretry').onclick = () => openAlert(f, opts); return; }
     const prim = res.recipients.find(x => x.primary), cc = res.recipients.filter(x => !x.primary);
     let tab = 'email'; const d = Object.assign({}, res.drafts);
-    $('#abody').innerHTML = `<div class="flag" style="margin:0 0 10px"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? SAFETY_TAG : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}${res.simulated ? ' <span class="pill warn">simulated reading</span>' : ''}</div></div>${siblings(r, f).length ? `<div class="note" style="margin:-4px 0 10px">Also covers the related flag${siblings(r, f).length > 1 ? 's' : ''}: ${siblings(r, f).map(x => `<b>${esc(x.rule_name)}</b> (${esc(x.message)})`).join('; ')}.</div>` : ''}
+    $('#abody').innerHTML = `<div class="flag" style="margin:0 0 10px"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? SAFETY_TAG : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}${res.simulated ? ' <span class="pill warn">simulated reading</span>' : ''}</div></div>${siblings(r, f).length ? `<fieldset class="note" style="margin:-4px 0 10px;border:1px solid var(--dk-border, #ccc);border-radius:8px;padding:8px 12px"><legend><b>Related flags on this well</b></legend>Tick each one this alert and follow-up task also cover. Unticked flags stay open as they are.${siblings(r, f).map((x, k) => `<label style="display:flex;gap:8px;margin-top:6px;cursor:pointer"><input type="checkbox" data-sib="${k}"> <span><b>${esc(x.rule_name)}</b> · ${esc(x.message)}</span></label>`).join('')}</fieldset>` : ''}
       <div class="alertgrid"><div>
         <h3 style="margin-top:0">Messages <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· edit anything before approving</span></h3>
         <div class="msgtabs"><button data-mt="email" class="on">Email</button>${prim.channels.includes('teams') ? '<button data-mt="teams">Teams</button>' : ''}${prim.channels.includes('text') ? '<button data-mt="text">Text</button>' : ''}</div>
@@ -914,7 +1176,7 @@
         <h3>Follow-up task</h3>
         <div class="frm" style="grid-template-columns:1fr 1fr"><div><label>Owner</label><select id="a-owner">${res.recipients.map((x, i) => `<option value="${i}">${esc(x.name)} (${esc(x.role)})</option>`).join('')}</select></div>
           <div><label>Due</label><input id="a-due" type="date" value="${esc(res.due_date)}"></div></div>
-        <div class="note">Approving marks the flag as being handled by the owner until the due date. If the reading gets worse, the flag comes back.</div>
+        <div class="note">Approving records the owner and due date on this flag${F.isSafety(f) ? ' (it stays on the list because it is a safety flag)' : ', and it leaves the list until the due date; if the reading gets worse, it comes back'}. Related flags are covered only if you tick them above.</div>
       </div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center">
         <button class="btn" id="aok">${ic('check')} Approve and create follow-up task</button>
@@ -943,7 +1205,8 @@
           recipients: res.recipients, drafts: d, checks: res.checks.concat(res.review ? [{name: 'Model review', ok: res.review.verdict === 'pass', detail: (res.review.issues || []).join('; ')}] : []), simulated: !!res.simulated});
         await post('api/acks', {engineer_id: ENG, well_id: f.well_id, rule_id: f.rule_id, until_date: due, owner: `${own.name} (${own.role})`, safety: !!F.isSafety(f),
           note: `Alert approved; follow-up task ${t.task_id}`, snapshot: F.ackSnapshot(f, RULES.find(x => x.id === f.rule_id), r.fact)});
-        for (const x of siblings(r, f)) await post('api/acks', {engineer_id: ENG, well_id: x.well_id, rule_id: x.rule_id, until_date: due, owner: `${own.name} (${own.role})`, safety: !!F.isSafety(x),
+        const ticked = [...document.querySelectorAll('[data-sib]:checked')].map(c => siblings(r, f)[+c.dataset.sib]).filter(Boolean);
+        for (const x of ticked) await post('api/acks', {engineer_id: ENG, well_id: x.well_id, rule_id: x.rule_id, until_date: due, owner: `${own.name} (${own.role})`, safety: !!F.isSafety(x),
           note: `Covered by alert task ${t.task_id} (${f.rule_name})`, snapshot: F.ackSnapshot(x, RULES.find(y => y.id === x.rule_id), r.fact)});
         $('#modal').hidden = true; await refresh(`Alert approved · task ${t.task_id} for ${own.name}`);
       } catch (e) { $('#aok').disabled = false; toast('Could not save: ' + e.message); }
@@ -1037,7 +1300,7 @@
         <div class="muted small">${tests.length - attn.length} other test${tests.length - attn.length === 1 ? '' : 's'} up to date, from the maintenance / integrity system.</div></section>
       <section><h2>Safety events (open, or in the last 30 days): ${events.length}</h2>
         ${events.length ? `<table><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Status</th><th>Regulator</th></tr></thead><tbody>${events.map(e => `<tr><td>${esc(String(e.event_date).slice(0, 10))}</td><td>${esc(e.category)}</td><td class="muted">${esc(e.description || '')}</td>
-          <td>${e.status === 'Closed' ? 'Closed' : `<span class="pill crit">${ic('x')} Open</span>`}</td><td>${e.reportable ? (e.reported_to_regulator ? 'Reported' : `<span class="pill crit">${ic('x')} Not reported</span>`) : 'Not reportable'}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">None.</div>'}</section>
+          <td>${e.status === 'Closed' ? 'Closed' : `<span class="pill crit">${ic('x')} Open</span>`}</td><td>${e.reportable ? (e.reported_to_regulator ? 'Reported' : `<span class="pill crit">${ic('x')} Not reported</span>`) : '<span class="muted small">Not flagged reportable in HSE system</span>'}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">None.</div>'}</section>
       <section><h2>Notes (${notes.length})</h2>${notes.length ? notes.map(n => noteHtml(n, false)).join('') : '<div class="muted">None.</div>'}</section>
       <section class="two"><div><h2>Open work orders (${wos.length})</h2>${wos.length ? `<table><tbody>${wos.map(o => `<tr><td>${esc(o.wo_number)}</td><td>${esc(o.wo_type)}: ${esc(o.description)}</td><td>${esc(o.status)}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">None.</div>'}</div>
         <div><h2>Downtime, last 30 days (${down30.length})</h2>${down30.length ? `<table><tbody>${down30.map(e => `<tr><td>${esc(e.event_date)}</td><td>${esc(e.category)}</td><td class="n">${e.is_open ? '<span class="pill crit">open</span>' : fmt(e.hours_lost, 1) + ' h'}</td></tr>`).join('')}</tbody></table>` : '<div class="muted">None.</div>'}</div></section>
@@ -1078,7 +1341,7 @@
       dollars_per_day_at_risk: r.value, fix_cost_cad: r.fix_cost, payback_days: r.payback_days,
       flags: r.flags.map(f => ({rule: f.rule_name, severity: f.severity, category: f.category, message: f.message, being_handled: f.handled ? (f.handled.note || 'yes') : false, back_because: f.resurfaced || null}))}));
     try {
-      const res = await post('api/chat', {conversation_id: chat.id, message: q, engineer_id: ENG, engineer_name: engName(), ranking, rules: RULES, safety_first: SAFETY_FIRST, ranking_mode: MODE, wo_handled: WO_HANDLED});
+      const res = await post('api/chat', {conversation_id: chat.id, message: q, engineer_id: ENG, engineer_name: engName(), ranking, rules: RULES, safety_first: true, ranking_mode: MODE, wo_handled: WO_HANDLED});
       chat.id = res.conversation_id; Object.assign(chat.evidence, res.evidence);
       res._q = q; $('#pending').outerHTML = `<div class="m a">${renderAnswer(res)}</div>`;
     } catch (e) { $('#pending').outerHTML = `<div class="m a"><span style="color:var(--dk-status-bad)">The assistant couldn't answer: ${esc(e.message)}. Try again in a moment.</span></div>`; }

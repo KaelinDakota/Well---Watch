@@ -337,7 +337,10 @@
         const a = acks[wid + '|' + f.rule_id];
         if (a && !a.cleared && (!a.until_date || toDate(a.until_date) >= asOfD)) {
           const why = resurfaced(f, r, a, fc);
-          if (why) f.resurfaced = why; else f.handled = {type: 'ack', note: a.note, until: a.until_date, by: a.acked_by, owner: a.owner};
+          // A safety flag never leaves the list: it shows who is handling it and stays ranked.
+          if (why) f.resurfaced = why;
+          else if (f.safety) f.in_hand = {type: 'ack', note: a.note, until: a.until_date, by: a.acked_by, owner: a.owner};
+          else f.handled = {type: 'ack', note: a.note, until: a.until_date, by: a.acked_by, owner: a.owner};
         }
         if (!f.handled && !f.safety && opts.woHandled && Number(fc.open_work_orders) > 0) f.handled = {type: 'work_order', note: fc.open_work_order};
         f.fix_cost = !f.safety ? (est[wid + '|' + f.rule_id] ?? r.fix_cost ?? null) : null;

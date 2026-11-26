@@ -1,0 +1,490 @@
+{
+ "note": "Built-in safety rules, generated from static/flags.js by deploy.py. The server puts these back on every rule save, so they cannot be turned off, weakened or deleted.",
+ "rules": [
+  {
+   "id": "SAFE_H2S_AMBIENT",
+   "name": "H2S detected at surface",
+   "severity": "Critical",
+   "weight": 70,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "well",
+   "conditions": [
+    {
+     "field": "h2s_ambient_max_7d_ppm",
+     "op": "gte",
+     "value": 10
+    }
+   ],
+   "message": "Fixed monitor read up to {h2s_ambient_max_7d_ppm} ppm H2S at the wellsite in the last 7 days ({sour_class}; residences in EPZ: {residences_in_epz}).",
+   "action": "Find the source and confirm monitors and access controls. Follow your company's integrity and emergency procedures; this flag informs, it does not decide.",
+   "group": "H2S at surface"
+  },
+  {
+   "id": "SAFE_SCVF_SERIOUS",
+   "name": "Serious surface casing vent flow",
+   "severity": "Critical",
+   "weight": 70,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "well",
+   "conditions": [
+    {
+     "field": "scvf_status",
+     "op": "eq",
+     "value": "Serious"
+    }
+   ],
+   "message": "Latest vent flow test: Serious, {scvf_rate_m3d} m3/d.",
+   "action": "Plan the repair within the regulator's timeline. Follow your company's integrity and emergency procedures; this flag informs, it does not decide.",
+   "group": "Well integrity: vent flow / failed tests"
+  },
+  {
+   "id": "SAFE_SC_PRESSURE",
+   "name": "Surface casing pressure building",
+   "severity": "Critical",
+   "weight": 60,
+   "enabled": true,
+   "category": "Safety",
+   "match": "any",
+   "dataset": "well",
+   "conditions": [
+    {
+     "field": "sc_psi_change",
+     "op": "gt",
+     "value": 25
+    },
+    {
+     "field": "sc_pct_of_limit",
+     "op": "gte",
+     "value": 30
+    }
+   ],
+   "message": "Surface casing pressure up {sc_psi_change} psi to {sc_psi_max_7d} psi ({sc_pct_of_limit}% of limit). Possible vent flow or gas migration.",
+   "action": "Run a vent flow / gas migration test. Follow your company's integrity and emergency procedures; this flag informs, it does not decide.",
+   "group": "Well integrity: vent flow / failed tests"
+  },
+  {
+   "id": "SAFE_CASING_NEAR_MAASP",
+   "name": "Casing pressure near MAASP",
+   "severity": "Critical",
+   "weight": 60,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "well",
+   "conditions": [
+    {
+     "field": "casing_pct_of_maasp",
+     "op": "gte",
+     "value": 80
+    }
+   ],
+   "message": "Production casing reached {casing_psi_max_7d} psi, {casing_pct_of_maasp}% of its {prod_casing_maasp_psi} psi MAASP.",
+   "action": "Check for a tubing or packer leak and plan to bleed down. Follow your company's integrity and emergency procedures; this flag informs, it does not decide.",
+   "group": "Production casing pressure"
+  },
+  {
+   "id": "SAFE_UNREPORTED",
+   "name": "Reportable event not reported",
+   "severity": "Critical",
+   "weight": 60,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "event",
+   "conditions": [
+    {
+     "field": "reportable",
+     "op": "is_true"
+    },
+    {
+     "field": "reported_to_regulator",
+     "op": "is_false"
+    }
+   ],
+   "message": "{match_count} reportable event(s) not yet reported to the regulator: {matches}.",
+   "action": "Report it now and record the reference number.",
+   "group": "Releases"
+  },
+  {
+   "id": "SAFE_FAILED_TEST",
+   "name": "Failed test not resolved",
+   "severity": "Critical",
+   "weight": 60,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "test",
+   "conditions": [
+    {
+     "field": "last_result",
+     "op": "one_of",
+     "value": "Fail, Serious"
+    }
+   ],
+   "message": "Latest result failed: {matches}.",
+   "action": "Plan the repair and retest. Follow your company's integrity and emergency procedures; this flag informs, it does not decide.",
+   "group": "Well integrity: vent flow / failed tests"
+  },
+  {
+   "id": "SAFE_GAS_RELEASE",
+   "name": "Open gas release, fire or line failure",
+   "severity": "Critical",
+   "weight": 60,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "event",
+   "conditions": [
+    {
+     "field": "category",
+     "op": "one_of",
+     "value": "Gas release, Fire, Flowline failure"
+    },
+    {
+     "field": "status",
+     "op": "ne",
+     "value": "Closed"
+    }
+   ],
+   "message": "Open: {matches}.",
+   "action": "Confirm the site is isolated and the repair is scheduled. Follow your company's integrity and emergency procedures; this flag informs, it does not decide.",
+   "group": "Releases"
+  },
+  {
+   "id": "SAFE_FLOWLINE_MAOP",
+   "name": "Flowline pressure near MAOP",
+   "severity": "Critical",
+   "weight": 50,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "well",
+   "conditions": [
+    {
+     "field": "flowline_pct_of_maop",
+     "op": "gte",
+     "value": 90
+    }
+   ],
+   "message": "Flowline reached {flowline_psi_max_7d} psi, {flowline_pct_of_maop}% of its {flowline_maop_psi} psi MAOP.",
+   "action": "Check for blockage, hydrates or a closed valve downstream. Follow your company's integrity and emergency procedures; this flag informs, it does not decide."
+  },
+  {
+   "id": "SAFE_PSV_LIFT",
+   "name": "Pressure safety valve lifted",
+   "severity": "Critical",
+   "weight": 50,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "event",
+   "conditions": [
+    {
+     "field": "category",
+     "op": "eq",
+     "value": "PSV lift"
+    },
+    {
+     "field": "days_ago",
+     "op": "lte",
+     "value": 30
+    }
+   ],
+   "message": "PSV lift: {matches}.",
+   "action": "Find why pressure reached set point; inspect and recertify the PSV. Follow your company's integrity and emergency procedures; this flag informs, it does not decide."
+  },
+  {
+   "id": "SAFE_CRITICAL_TEST_OVERDUE",
+   "name": "Safety-critical test overdue",
+   "severity": "Critical",
+   "weight": 50,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "test",
+   "conditions": [
+    {
+     "field": "overdue",
+     "op": "is_true"
+    },
+    {
+     "field": "safety_critical",
+     "op": "is_true"
+    }
+   ],
+   "message": "Overdue: {matches}.",
+   "action": "Schedule the test; check whether the well may keep operating until it is done.",
+   "group": "Tests due"
+  },
+  {
+   "id": "SAFE_SPILL_OPEN",
+   "name": "Spill not closed out",
+   "severity": "Critical",
+   "weight": 50,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "event",
+   "conditions": [
+    {
+     "field": "category",
+     "op": "eq",
+     "value": "Spill"
+    },
+    {
+     "field": "status",
+     "op": "ne",
+     "value": "Closed"
+    }
+   ],
+   "message": "Open spill: {matches}.",
+   "action": "Confirm cleanup, sampling and close-out documentation.",
+   "group": "Releases"
+  },
+  {
+   "id": "SAFE_NONCOMPLIANCE",
+   "name": "Open regulator non-compliance",
+   "severity": "Critical",
+   "weight": 50,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "event",
+   "conditions": [
+    {
+     "field": "category",
+     "op": "eq",
+     "value": "Regulator non-compliance"
+    },
+    {
+     "field": "status",
+     "op": "ne",
+     "value": "Closed"
+    }
+   ],
+   "message": "Open finding: {matches}.",
+   "action": "Complete the corrective action before its deadline and respond to the regulator."
+  },
+  {
+   "id": "SAFE_H2S_ALARMS",
+   "name": "H2S alarms this week",
+   "severity": "Critical",
+   "weight": 40,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "event",
+   "conditions": [
+    {
+     "field": "category",
+     "op": "eq",
+     "value": "H2S alarm"
+    },
+    {
+     "field": "days_ago",
+     "op": "lte",
+     "value": 7
+    },
+    {
+     "field": "planned",
+     "op": "is_false"
+    }
+   ],
+   "message": "{match_count} H2S alarm(s) in the last 7 days.",
+   "action": "Investigate the source; check detector calibration. Follow your company's integrity and emergency procedures; this flag informs, it does not decide.",
+   "group": "H2S at surface"
+  },
+  {
+   "id": "SAFE_ESD_TRIPS",
+   "name": "Repeated unplanned ESD trips",
+   "severity": "Warning",
+   "weight": 30,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "event",
+   "conditions": [
+    {
+     "field": "category",
+     "op": "eq",
+     "value": "ESD trip"
+    },
+    {
+     "field": "planned",
+     "op": "is_false"
+    },
+    {
+     "field": "days_ago",
+     "op": "lte",
+     "value": 30
+    }
+   ],
+   "message": "{match_count} unplanned emergency shutdowns in 30 days.",
+   "action": "Find the root cause; repeated trips wear the shutdown system and hide real upsets.",
+   "min_count": 3
+  },
+  {
+   "id": "SAFE_ELECTRICAL",
+   "name": "Electrical fault open",
+   "severity": "Warning",
+   "weight": 30,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "event",
+   "conditions": [
+    {
+     "field": "category",
+     "op": "eq",
+     "value": "Electrical fault"
+    },
+    {
+     "field": "status",
+     "op": "ne",
+     "value": "Closed"
+    },
+    {
+     "field": "days_ago",
+     "op": "lte",
+     "value": 30
+    }
+   ],
+   "message": "Open: {matches}.",
+   "action": "Have an electrician check the drive, cable and grounding before restart."
+  },
+  {
+   "id": "SAFE_VENT_LIMIT",
+   "name": "Venting above monthly limit",
+   "severity": "Warning",
+   "weight": 30,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "well",
+   "conditions": [
+    {
+     "field": "vent_pct_of_limit",
+     "op": "gte",
+     "value": 100
+    }
+   ],
+   "message": "Vented {vent_mtd_m3} m3 this month, {vent_pct_of_limit}% of the {vent_limit_m3_month} m3 limit.",
+   "action": "Find the vent source (tank, pneumatics, casing gas) and conserve or flare per approval."
+  },
+  {
+   "id": "SAFE_WALL_LOSS",
+   "name": "High corrosion wall loss",
+   "severity": "Warning",
+   "weight": 30,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "test",
+   "conditions": [
+    {
+     "field": "test_type",
+     "op": "contains",
+     "value": "Corrosion"
+    },
+    {
+     "field": "result_value",
+     "op": "gte",
+     "value": 40
+    }
+   ],
+   "message": "Corrosion survey: {matches}.",
+   "action": "Plan repair or replacement; review corrosion inhibition."
+  },
+  {
+   "id": "SAFE_TEST_OVERDUE",
+   "name": "Test or inspection overdue",
+   "severity": "Warning",
+   "weight": 20,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "test",
+   "conditions": [
+    {
+     "field": "overdue",
+     "op": "is_true"
+    },
+    {
+     "field": "safety_critical",
+     "op": "is_false"
+    }
+   ],
+   "message": "Overdue: {matches}.",
+   "action": "Schedule it.",
+   "group": "Tests due"
+  },
+  {
+   "id": "SAFE_INACTIVE",
+   "name": "Well inactive 12+ months",
+   "severity": "Warning",
+   "weight": 20,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "well",
+   "conditions": [
+    {
+     "field": "days_since_production",
+     "op": "gte",
+     "value": 365
+    }
+   ],
+   "message": "No production for {days_since_production} days.",
+   "action": "Check inactive / suspended well requirements with your regulator."
+  },
+  {
+   "id": "SAFE_TEST_DUE_SOON",
+   "name": "Test due within 30 days",
+   "severity": "Review",
+   "weight": 5,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "test",
+   "conditions": [
+    {
+     "field": "days_until_due",
+     "op": "gte",
+     "value": 0
+    },
+    {
+     "field": "days_until_due",
+     "op": "lte",
+     "value": 30
+    }
+   ],
+   "message": "Due soon: {matches}.",
+   "action": "Book it.",
+   "group": "Tests due"
+  },
+  {
+   "id": "CASING_PRESSURE_RISING",
+   "name": "Casing pressure rising",
+   "severity": "Critical",
+   "weight": 40,
+   "enabled": true,
+   "category": "Safety",
+   "match": "all",
+   "dataset": "well",
+   "conditions": [
+    {
+     "field": "casing_psi_change",
+     "op": "gt",
+     "value": 150
+    }
+   ],
+   "message": "Casing pressure up {casing_psi_change} psi to {casing_psi_7d} psi versus baseline.",
+   "action": "Check for a packer or tubing leak; review against well integrity procedures.",
+   "group": "Production casing pressure"
+  }
+ ]
+}

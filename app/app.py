@@ -120,6 +120,30 @@ def well(well_id: str):
     }
 
 
+# Built-in safety rules are set by the operator. Whatever a browser sends, they are saved exactly as shipped:
+# always on, never weakened, never deleted. Safety always ranks first; there is no setting to turn that off.
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "locked_rules.json")) as _f:
+    LOCKED_RULES = json.load(_f)["rules"]
+LOCKED_IDS = {r["id"] for r in LOCKED_RULES}
+
+
+def enforce_locked(rules):
+    """Puts every built-in safety rule back as shipped. Returns the rules and the names that were changed back."""
+    orig = {r["id"]: r for r in LOCKED_RULES}
+    restored, out = [], []
+    for r in rules:
+        rid = r.get("id") if isinstance(r, dict) else None
+        if rid in orig:
+            if json.dumps(r, sort_keys=True) != json.dumps(orig[rid], sort_keys=True): restored.append(orig[rid]["name"])
+            out.append(orig[rid])
+        else:
+            out.append(r)
+    for rid, r in orig.items():
+        if not any(isinstance(x, dict) and x.get("id") == rid for x in out):
+            out.append(r); restored.append(r["name"])
+    return out, restored
+
+
 @app.put("/api/rules/{engineer_id}")
 async def save_rules(engineer_id: str, request: Request):
     if not ENG_RE.fullmatch(engineer_id): raise HTTPException(400, "bad engineer id")
@@ -127,12 +151,14 @@ async def save_rules(engineer_id: str, request: Request):
     rules, mode = body.get("rules"), body.get("mode", "score")
     if not isinstance(rules, list) or len(rules) > 100 or mode not in ("score", "value", "payback"):
         raise HTTPException(400, "rules must be a list; mode is value, payback or score")
+    rules, restored = enforce_locked(rules)
     who = request.headers.get("x-forwarded-email") or request.headers.get("x-forwarded-preferred-username") or "unknown"
+    # Every save is a new row: app_flag_rules is the history of who changed the rules and when.
     query(f"INSERT INTO {S}.app_flag_rules VALUES (:e, :r, :m, :who, current_timestamp())", {"e": engineer_id, "r": json.dumps(rules), "m": mode, "who": who})
     if "safety_first" in body or "wo_handled" in body:
-        query(f"INSERT INTO {S}.app_flag_settings (engineer_id, safety_first, saved_by, saved_at, wo_handled) VALUES (:e, cast(:sf AS BOOLEAN), :who, current_timestamp(), cast(:wo AS BOOLEAN))",
-              {"e": engineer_id, "sf": str(body.get("safety_first", True) is not False).lower(), "wo": str(bool(body.get("wo_handled"))).lower(), "who": who})
-    return {"ok": True, "saved_by": who}
+        query(f"INSERT INTO {S}.app_flag_settings (engineer_id, safety_first, saved_by, saved_at, wo_handled) VALUES (:e, true, :who, current_timestamp(), cast(:wo AS BOOLEAN))",
+              {"e": engineer_id, "wo": str(bool(body.get("wo_handled"))).lower(), "who": who})
+    return {"ok": True, "saved_by": who, "restored_safety_rules": restored}
 
 
 # ---------------- safety entries made by engineers ----------------
@@ -447,3 +473,8 @@ async def alert_reset_demo(request: Request):
             query(f"""INSERT INTO {S}.app_flag_acks (engineer_id, well_id, rule_id, until_date, note, snapshot_json, cleared, acked_by, acked_at, owner)
                       VALUES (:e, :w, :r, NULL, 'Demo reset', '{{}}', true, :who, current_timestamp(), NULL)""", {"e": eng, "w": t["well_id"], "r": x["rule_id"], "who": _who(request)})
     return {"ok": True, "cancelled": len(open_demo)}
+
+
+# ---------------- safety incidents: report, notify, investigate, close (incidents.py) ----------------
+import incidents  # noqa: E402
+incidents.register(app, query, S, llm, _who, _well)
