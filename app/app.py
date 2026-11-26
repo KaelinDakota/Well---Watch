@@ -478,3 +478,5 @@ async def alert_reset_demo(request: Request):
 # ---------------- safety incidents: report, notify, investigate, close (incidents.py) ----------------
 import incidents  # noqa: E402
 incidents.register(app, query, S, llm, _who, _well)
+import issues  # noqa: E402
+issues.register(app, query, S, llm, _who, _well, LOCKED_IDS)

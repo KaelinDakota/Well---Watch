@@ -19,7 +19,9 @@
   const ic = (n, cls = 'sm') => `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
   const SAFETY_TAG = `<span class="shield">${'<svg class="ico sm" viewBox="0 0 24 24" aria-hidden="true">'}${'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'}</svg>Safety</span>`;
   const store = {get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }};
-  const api = async (path, opts) => { const r = await fetch(path, opts); if (!r.ok) throw new Error((await r.text()).slice(0, 300) || r.statusText); return r.json(); };
+  const api = async (path, opts) => { const r = await fetch(path, opts);
+    if (!r.ok) { const t = await r.text(); let m = t; try { const j = JSON.parse(t); m = typeof j.detail === 'string' ? j.detail : t; } catch (e) {} throw new Error(m.slice(0, 300) || r.statusText); }
+    return r.json(); };
   const post = (path, body, method = 'POST') => api(path, {method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   const lin = o => `data-lin='${esc(JSON.stringify(o))}'`;
 
@@ -70,7 +72,8 @@
     loadRules(); newChat();
     $('#reportbtn').onclick = () => reportIncident();
     loadIncidents().then(() => { if (view === 'incidents') renderIncidents(); }); watchIncidents(true);
-    const h = (location.hash || '').slice(1); if (['day', 'wells', 'safety', 'rules', 'alerts', 'incidents'].includes(h)) view = h;
+    loadIssues().then(() => { if (view === 'issues') renderIssues(); else if (view === 'day') render(); });
+    const h = (location.hash || '').slice(1); if (['day', 'wells', 'safety', 'rules', 'alerts', 'incidents', 'issues'].includes(h)) view = h;
     toggleChat(store.get('ww-chat') !== 'closed');
     render();
   }
@@ -134,7 +137,7 @@
   }
   function render() {
     renderFreshness();
-    const titles = {day: 'My day', wells: 'My wells', safety: 'Safety', rules: 'Flag rules', alerts: 'Alerts', incidents: 'Safety incidents'};
+    const titles = {day: 'My day', wells: 'My wells', safety: 'Safety', rules: 'Flag rules', alerts: 'Alerts', incidents: 'Safety incidents', issues: 'Production issues'};
     $('#ptitle').textContent = titles[view];
     $('#pmeta').innerHTML = `${esc(engName() || '')}<span class="sep" style="opacity:.5;padding:0 6px">·</span>${myWells().length} wells<span class="sep" style="opacity:.5;padding:0 6px">·</span>Data through ${esc(D.as_of)}`;
     document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
@@ -142,8 +145,9 @@
     $('#c-day').textContent = Math.min(10, ACTIVE().length); $('#c-wells').textContent = ids.size; $('#c-rules').textContent = RULES.filter(r => r.enabled).length;
     $('#c-safety').textContent = RANK.filter(r => r.tier === 'safety').length;
     $('#c-alerts').textContent = needsAlert().length;
+    if (ISS) $('#c-iss').textContent = ISS.issues.filter(i => issOpen(i) && ids.has(i.well_id)).length || '';
     renderSimBar();
-    ({day: renderDay, wells: renderWells, safety: renderSafety, rules: renderRules, alerts: renderAlerts, incidents: renderIncidents})[view]();
+    ({day: renderDay, wells: renderWells, safety: renderSafety, rules: renderRules, alerts: renderAlerts, incidents: renderIncidents, issues: renderIssues})[view]();
   }
   function bindCommon(root = document) {
     root.querySelectorAll('[data-well]').forEach(a => a.onclick = () => openWell(a.dataset.well));
@@ -263,7 +267,7 @@
     const list = showAll ? act : act.slice(0, 10);
     const head = {safety: ['Safety', 'Deal with these first, most severe first.'], production: ['Production and cost', `Ranked by ${SORT_LABEL()}.`], watch: ['Watch list', 'Review-level items, by points.']};
     let last = null;
-    $('#main').innerHTML = `<div class="kpis six">
+    $('#main').innerHTML = `<div id="brief"></div><div class="kpis six">
         <div class="kpi"><div class="n">${mine.length}</div><div class="l">Wells assigned to ${esc(engName())}</div></div>
         <div class="kpi crit"><div class="n">${saf}</div><div class="l">Wells with a safety issue</div></div>
         <div class="kpi warn"><div class="n">${prod.length}</div><div class="l">Wells losing production or money</div></div>
@@ -282,6 +286,7 @@
     if ($('#more')) $('#more').onclick = () => { showAll = !showAll; render(); };
     bindCommon($('#main')); bindFlagActions($('#main'));
     document.querySelectorAll('[data-trace-snap]').forEach(a => a.onclick = () => lineage({kind: F.isSafety({category: a.dataset.cat}) ? 'safety_snapshot' : 'snapshot', well_id: a.dataset.traceSnap}));
+    drawBriefing(); loadBriefing();
   }
   function flagHtml(f) {
     const chips = f.items ? f.evidence.map(e => `<span class="chip hit lk2" ${lin(itemLin(e.item))} title="Trace this record">${esc(e.value)}</span>`).join('')
@@ -292,7 +297,8 @@
     if (!h && f.fix_cost !== null && f.fix_cost !== undefined) meta.push(`fix ≈ $${fmt(f.fix_cost)} <span class="muted">(${esc(f.fix_cost_source)})</span>`);
     const acts = (h ? (h.type === 'ack' ? `<a class="lk" data-unack='${key}'>no longer being handled</a>` : '')
       : ih ? `${alertable(f) ? `<a class="lk" data-alert='${key}'>${ic('flag')} draft alert</a> · ` : ''}<a class="lk" data-report='${key}'>report safety incident</a> · <a class="lk" data-unack='${key}'>clear who is handling it</a>`
-      : `${alertable(f) ? `<a class="lk" data-alert='${key}'>${ic('flag')} draft alert</a> · ` : ''}${f.safety ? `<a class="lk" data-report='${key}'>report safety incident</a> · ` : ''}<a class="lk" data-ack='${key}'>${f.safety ? 'record who is handling it' : 'mark as being handled'}</a>${!f.safety ? ` · <a class="lk" data-est='${key}'>${EST[f.well_id + '|' + f.rule_id] !== undefined ? 'change' : 'add'} fix cost estimate</a>` : ''}`) + ` · <a class="lk" data-note='${key}'>add note</a>`;
+      : `${alertable(f) ? `<a class="lk" data-alert='${key}'>${ic('flag')} draft alert</a> · ` : ''}${f.safety ? `<a class="lk" data-report='${key}'>report safety incident</a> · ` : ''}<a class="lk" data-ack='${key}'>${f.safety ? 'record who is handling it' : 'mark as being handled'}</a>${!f.safety ? ` · <a class="lk" data-est='${key}'>${EST[f.well_id + '|' + f.rule_id] !== undefined ? 'change' : 'add'} fix cost estimate</a>` : ''}`) + ` · <a class="lk" data-note='${key}'>add note</a>`
+      + (f.safety ? '' : (() => { const iss = issFor(f.well_id); return iss ? (iss.rule_ids.includes(f.rule_id) ? ` · <a class="lk" data-open-iss="${esc(iss.issue_id)}">issue ${esc(iss.issue_id)}</a> <span class="muted">(${esc(iss.state)})</span>` : ` · <a class="lk" data-issue='${key}'>add to issue ${esc(iss.issue_id)}</a>`) : ` · <a class="lk" data-issue='${key}'>open issue</a>`; })());
     const fnotes = D.notes.filter(n => n.well_id === f.well_id && n.rule_id === f.rule_id);
     return `<div class="flag" style="${h ? 'opacity:.6' : ''}"><span class="sev ${f.severity}">${f.severity}</span><div class="msg">${F.isSafety(f) ? SAFETY_TAG : ''}${f.resurfaced ? `<span class="shield back">${ic('undo')}Back on the list</span>` : ''}<b>${esc(f.rule_name)}</b> · ${esc(f.message)}</div>
       ${f.resurfaced ? `<div class="act" style="color:var(--dk-status-amber)">Back on the list: ${esc(f.resurfaced)}.</div>` : ''}
@@ -330,6 +336,8 @@
       const category = /H2S/i.test(g) ? 'H2S release or alarm' : /Releases|SPILL/i.test(g) ? 'Spill or release' : /GAS_RELEASE|vent/i.test(g) ? 'Gas release' : 'Equipment failure';
       reportIncident({well_id: f.well_id, category, source_rule_id: f.rule_id, text: `Flag: ${f.rule_name}. ${f.message} `}); });
     root.querySelectorAll('[data-note]').forEach(a => a.onclick = e => { e.stopPropagation(); const {w, r} = JSON.parse(a.dataset.note); noteForm({well_id: w, rule_id: r}); });
+    root.querySelectorAll('[data-issue]').forEach(a => a.onclick = e => { e.stopPropagation(); openIssueFromFlag(find(a.dataset.issue).f); });
+    root.querySelectorAll('[data-open-iss]').forEach(a => a.onclick = e => { e.stopPropagation(); openIssue(a.dataset.openIss); });
   }
   const addDays = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
   function ackForm({rk, f, rule}) {
@@ -527,7 +535,7 @@
           [['gor_change_pct'], chartBox('Gas-oil ratio (scf/bbl)', 'gor', d.daily.map(x => ({date: x.prod_date, y: x.gor_scf_bbl})), {alert: alertF.has('gor_change_pct')})],
           [['casing_psi_change'], chartBox('Production casing pressure (psi)', 'csg', d.daily.map(x => ({date: x.prod_date, y: x.casing_psi})), {alert: alertF.has('casing_psi_change')})]])}
       </div>
-      <h3>Downtime events (${d.downtime.length})</h3>
+      <h3>Downtime events (${d.downtime.length})</h3><div id="dt-extra"></div>
       ${d.downtime.length ? `<div class="tw" style="max-height:260px"><table><thead><tr><th>Date</th><th>Category (AI)</th><th>Operator's text</th><th class="n">Hours</th><th>Planned</th><th></th></tr></thead><tbody>
         ${d.downtime.map(e => `<tr><td>${esc(e.event_date)}</td><td>${esc(e.category)}</td><td class="muted">${esc(e.reason_original)}</td><td class="n">${e.is_open ? '<span class="pill crit">open</span>' : fmt(e.hours_lost, 1)}</td><td>${e.planned ? 'yes' : 'no'}</td>
           <td><a class="lk" ${lin({kind: 'downtime', bronze_id: e._bronze_id})}>trace</a></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">None.</div>'}
@@ -539,7 +547,7 @@
       ${d.work_orders.length ? `<div class="tw"><table><thead><tr><th>WO</th><th>Type</th><th>Description</th><th>Start</th><th>End</th><th>Status</th><th></th></tr></thead><tbody>
         ${d.work_orders.map(o => `<tr><td>${esc(o.wo_number)}</td><td>${esc(o.wo_type)}</td><td>${esc(o.description)}</td><td>${esc(o.start_date)}</td><td>${esc(o.end_date || '')}</td><td>${esc(o.status)}</td>
           <td><a class="lk" ${lin({kind: 'work_order', bronze_id: o._bronze_id})}>trace</a></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">None.</div>'}`;
-    bindCommon($('#dbody')); bindFlagActions($('#dbody'));
+    bindCommon($('#dbody')); bindFlagActions($('#dbody')); wellDowntimeExtras(id);
     $('#dnote').onclick = () => noteForm({well_id: id});
     document.querySelectorAll('#dbody [data-arch]').forEach(a => a.onclick = async () => { await post(`api/notes/${a.dataset.arch}/archive`, {}); await refresh('Note archived'); openWell(id); });
     if ($('#dcf')) $('#dcf').onclick = () => editWellFields(id);
@@ -1221,6 +1229,265 @@
         ${d.teams_message ? `<h3>Teams</h3><pre style="white-space:pre-wrap;font:13px/19px var(--dk-font-body)">${esc(d.teams_message)}</pre>` : ''}
         ${d.text_message ? `<h3>Text</h3><pre style="white-space:pre-wrap;font:13px/19px var(--dk-font-body)">${esc(d.text_message)}</pre>` : ''}</div>
         <div><h3>Checker at approval</h3>${checksHtml(ck, null, false)}</div></div></div>`);
+  }
+
+  // ---------------- Production issues, downtime by cause, morning briefing and call ----------------
+  let ISS = null, issErr = null, issTab = 'issues', DT = null, DT_DAYS = 90, BRIEF = {};
+  const ISS_STATES = ['Detected', 'Triaged', 'Diagnosing', 'Fix Planned', 'Awaiting Approval', 'Scheduled', 'In Progress', 'Verifying', 'Closed'];
+  const issOpen = i => !['Closed', 'Dismissed'].includes(i.state);
+  const issPill = s => `<span class="pill ${s === 'Closed' ? 'ok' : s === 'Dismissed' ? '' : s === 'Detected' ? 'crit' : 'warn'}">${esc(s)}</span>`;
+  const issFor = wid => ISS && ISS.issues.find(i => i.well_id === wid && issOpen(i));
+  const issBar = s => s === 'Dismissed' ? '<ol class="incsteps"><li class="now">Dismissed</li></ol>'
+    : `<ol class="incsteps iss">${ISS_STATES.map((x, k) => `<li class="${k < ISS_STATES.indexOf(s) ? 'done' : k === ISS_STATES.indexOf(s) ? 'now' : ''}">${esc(x)}</li>`).join('')}</ol>`;
+  const boeOf = w => (w.lost_oil_bopd || 0) * (1 + (w.gor_7d || 0) / 6000);
+  async function loadIssues() {
+    try { ISS = await api('api/issues'); issErr = null; } catch (e) { issErr = e.message; }
+    const c = $('#c-iss'); if (c && ISS) c.textContent = ISS.issues.filter(i => issOpen(i) && myIds().has(i.well_id)).length || '';
+  }
+  async function openIssueFromFlag(f) {
+    try {
+      const r = await post('api/issues', {well_id: f.well_id, rule_ids: [f.rule_id], title: `${f.rule_name}: ${f.message}`, source: 'flag'});
+      await loadIssues(); render();
+      toast(r.merged ? (r.new_flags.length ? `Added to the open issue ${r.issue_id} on ${f.well_id}` : `Already part of ${r.issue_id}`) : `Opened ${r.issue_id}`);
+      openIssue(r.issue_id);
+    } catch (e) { toast('Could not open the issue: ' + e.message); }
+  }
+
+  function renderIssues() {
+    if (!ISS) {
+      $('#main').innerHTML = issErr ? `<div class="errcard"><b>Couldn't load production issues.</b><div>${esc(issErr)}</div><button class="btn" id="issretry">Try again</button></div>` : '<div class="card" style="padding:20px"><span class="skel" style="height:16px;width:60%;margin:10px 0"></span></div>';
+      if ($('#issretry')) $('#issretry').onclick = async () => { await loadIssues(); renderIssues(); };
+      if (!issErr) loadIssues().then(() => view === 'issues' && renderIssues());
+      return;
+    }
+    const tabs = `<div class="bar"><div class="seg"><button class="${issTab === 'issues' ? 'on' : ''}" data-itab="issues">Issues</button><button class="${issTab === 'downtime' ? 'on' : ''}" data-itab="downtime">Downtime by cause</button></div></div>`;
+    if (issTab === 'downtime') { $('#main').innerHTML = tabs + '<div id="dtbox"></div>'; bindTabs(); renderDowntime(); return; }
+    const ids = myIds(), mine = ISS.issues.filter(i => ids.has(i.well_id)), open = mine.filter(issOpen), done = mine.filter(i => !issOpen(i));
+    const cfg = ISS.settings, val_ = open.reduce((s, i) => s + (i.now_value_cad_day || 0), 0);
+    const waitAppr = open.filter(i => i.state === 'Awaiting Approval'), verifying = open.filter(i => i.state === 'Verifying');
+    const row = i => `<tr class="clickrow" data-iss="${esc(i.issue_id)}" tabindex="0"><td><b>${esc(i.issue_id)}</b><div class="muted small">${esc(i.source)} · opened ${esc(agoText(i.opened_at))}</div></td>
+      <td><a class="lk" data-well="${esc(i.well_id)}">${esc(i.well_id)}</a> <span class="muted small">${esc(i.well_name || '')}</span><div class="small">${esc(i.title)}</div>
+        ${i.repeats.length ? `<div class="small"><span class="pill warn">Repeat failure</span> ${i.repeats.map(r => `${esc(r.reason_label)} ×${r.stops}`).join(', ')}</div>` : ''}</td>
+      <td>${issPill(i.state)}${i.state === 'Awaiting Approval' ? `<div class="muted small">$${fmt(i.est_cost_cad)} · needs ${esc(cfg.approver_role)}</div>` : ''}${i.scheduled_date && i.state === 'Scheduled' ? `<div class="muted small">for ${esc(i.scheduled_date)}</div>` : ''}</td>
+      <td class="n">${issOpen(i) ? fmt(i.now_lost_bopd, 1) : fmt(i.lost_oil_bbl) + ' bbl'}</td><td class="n">${issOpen(i) ? '$' + fmt(i.now_value_cad_day) : i.actual_cost_cad !== null ? '$' + fmt(i.actual_cost_cad) : ''}</td>
+      <td class="small">${esc(i.outcome || i.dismissed_reason || '')}</td></tr>`;
+    $('#main').innerHTML = tabs + `
+      <div class="kpis">
+        <div class="kpi ${open.length ? 'warn' : ''}"><div class="n">${open.length}</div><div class="l">Open production issues</div></div>
+        <div class="kpi"><div class="n">$${fmt(val_)}</div><div class="l">At risk per day on those wells (today's snapshot)</div></div>
+        <div class="kpi ${waitAppr.length ? 'warn' : ''}"><div class="n">${waitAppr.length}</div><div class="l">Waiting for approval (fixes ≥ $${fmt(cfg.approval_threshold_cad)})</div></div>
+        <div class="kpi"><div class="n">${verifying.length}</div><div class="l">Fixes being verified</div></div></div>
+      <div class="note" style="margin-bottom:10px">One issue per well while it's open: a second flag on the same well is merged into it. Safety flags are handled as <a class="lk" id="toinc">safety incidents</a>, never as production issues.
+        Open one from a flag on <a class="lk" id="today">My day</a> (<b>open issue</b>) or <a class="lk" id="issnew">raise one by hand</a>.</div>
+      <div class="card"><div class="tw"><table><thead><tr><th>Issue</th><th>Well and problem</th><th>Where it is</th><th class="n">Lost bbl/d now</th><th class="n">$/day now</th><th>Outcome</th></tr></thead>
+        <tbody>${open.length ? open.map(row).join('') : '<tr><td colspan="6" class="muted">No open production issues on your wells.</td></tr>'}</tbody></table></div></div>
+      ${done.length ? `<details style="margin-top:14px"><summary><b>Closed and dismissed</b> <span class="muted small">${done.length}</span></summary><div class="card"><div class="tw"><table><tbody>${done.map(row).join('')}</tbody></table></div></div></details>` : ''}
+      <div class="muted small" style="margin-top:8px">Records: <a class="lk" href="${esc(tableUrl(SCH() + '.app_production_issues'))}" target="_blank" rel="noopener">app_production_issues</a> (append-only) and <a class="lk" href="${esc(tableUrl(SCH() + '.app_issue_events'))}" target="_blank" rel="noopener">app_issue_events</a> (every action, never edited). Approval limit and approver from <a class="lk" href="${esc(tableUrl(SCH() + '.gold_issue_settings'))}" target="_blank" rel="noopener">gold_issue_settings</a>.</div>`;
+    bindTabs();
+    $('#toinc').onclick = () => go('incidents'); $('#today').onclick = () => go('day');
+    $('#issnew').onclick = () => formModal('Raise a production issue', `<div class="frm"><div><label>Well</label><select id="ni-w">${wellOptions()}</select></div><div class="full"><label>What's wrong</label><input id="ni-t" placeholder="e.g. Oil down 30% since the line pressure went up"></div></div>`, async () => {
+      const r = await post('api/issues', {well_id: val('ni-w'), title: val('ni-t'), source: 'manual'}); $('#modal').hidden = true; await loadIssues(); renderIssues(); toast(r.merged ? `Added to the open issue ${r.issue_id}` : `Opened ${r.issue_id}`); openIssue(r.issue_id); });
+    document.querySelectorAll('[data-iss]').forEach(tr => { const o = e => { if (e.target.closest('[data-well]')) return; openIssue(tr.dataset.iss); }; tr.onclick = o; tr.onkeydown = e => { if (e.key === 'Enter') o(e); }; });
+    bindCommon($('#main'));
+  }
+  function bindTabs() { document.querySelectorAll('[data-itab]').forEach(b => b.onclick = () => { issTab = b.dataset.itab; renderIssues(); }); }
+
+  async function renderDowntime() {
+    const box = $('#dtbox');
+    box.innerHTML = '<div class="card" style="padding:20px"><span class="skel" style="height:16px;width:60%;margin:10px 0"></span><span class="skel" style="height:16px;width:80%;margin:10px 0"></span></div>';
+    try { DT = await api(`api/downtime?engineer_id=${encodeURIComponent(ENG)}&days=${DT_DAYS}`); } catch (e) { box.innerHTML = `<div class="errcard"><b>Couldn't load downtime.</b><div>${esc(e.message)}</div></div>`; return; }
+    const rows = DT.by_cause, max = Math.max(1, ...rows.map(r => r.lost_boe || 0)), tot = rows.reduce((s, r) => s + (r.lost_boe || 0), 0);
+    const totv = rows.reduce((s, r) => s + (r.lost_value_cad || 0), 0);
+    box.innerHTML = `<div class="bar"><b>Lost production by cause</b> <span class="note">${esc(engName())}'s wells, last
+        <select id="dt-days">${[30, 90, 180].map(d => `<option ${d === DT_DAYS ? 'selected' : ''}>${d}</option>`).join('')}</select> days to ${esc(DT.as_of)} · ${fmt(tot)} BOE and $${fmt(totv)} lost (estimates)</span></div>
+      <div class="card"><div class="tw"><table><thead><tr><th>Reason code</th><th class="n">Stops</th><th class="n">Wells</th><th class="n">Hours down</th><th style="width:30%">Lost BOE</th><th class="n">Lost $</th></tr></thead><tbody>
+        ${rows.map(r => `<tr><td><b>${esc(r.reason_label || r.reason_code)}</b> <span class="muted small">${esc(r.reason_code)} · ${esc(r.reason_group || '')}</span></td><td class="n">${fmt(r.stops)}</td><td class="n">${fmt(r.wells)}</td><td class="n">${fmt(r.hours)}</td>
+          <td><div class="hbar"><span style="width:${Math.round(100 * (r.lost_boe || 0) / max)}%"></span><em>${fmt(r.lost_boe)}${r.still_down ? ` · ${r.still_down} still down, not counted yet` : ''}</em></div></td><td class="n">$${fmt(r.lost_value_cad)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No downtime in this window.</td></tr>'}
+      </tbody></table></div><div class="muted small" style="padding:8px 14px">${esc(DT.method)}${DT.unmapped ? ` ${DT.unmapped} event(s) didn't match a code and show as Other.` : ''}</div></div>
+      <h3>Repeat failures <span class="muted small" style="text-transform:none;letter-spacing:0;font-weight:400">· ${DT.settings.repeat_failure_count}+ unplanned stops for the same reason within ${DT.settings.repeat_failure_days} days</span></h3>
+      <div class="card"><div class="tw"><table><thead><tr><th>Well</th><th>Reason</th><th class="n">Stops</th><th>Last stop</th><th class="n">Lost BOE</th><th class="n">Lost $</th><th></th></tr></thead><tbody>
+        ${DT.repeat_failures.map(r => { const iss = issFor(r.well_id); return `<tr><td><a class="lk" data-well="${esc(r.well_id)}">${esc(r.well_id)}</a> <span class="muted small">${esc(r.well_name)} · ${esc(r.lift_type || '')}</span></td><td>${esc(r.reason_label)}</td>
+          <td class="n"><b>${r.stops}</b></td><td>${esc(r.last_stop)}</td><td class="n">${fmt(r.lost_boe, 1)}</td><td class="n">$${fmt(r.lost_value_cad)}</td>
+          <td class="small">${iss ? `<a class="lk" data-open-iss="${esc(iss.issue_id)}">${esc(iss.issue_id)}</a> ${issPill(iss.state)}` : `<a class="lk" data-rep-iss='${esc(JSON.stringify(r))}'>open issue</a>`}</td></tr>`; }).join('') || '<tr><td colspan="7" class="muted">No repeat failures on your wells.</td></tr>'}
+      </tbody></table></div></div>
+      <details style="margin-top:14px"><summary><b>Standard reason codes</b> <span class="muted small">${DT.codes.length} · maintained by operations</span></summary>
+        <div class="card"><div class="tw"><table><thead><tr><th>Code</th><th>Label</th><th>Group</th><th>Description</th><th></th></tr></thead><tbody>
+          ${DT.codes.map(c => `<tr><td><b>${esc(c.reason_code)}</b></td><td>${esc(c.label)}</td><td>${esc(c.reason_group)}</td><td class="small">${esc(c.description || '')}</td><td><a class="lk" data-code='${esc(JSON.stringify(c))}'>edit</a></td></tr>`).join('')}
+        </tbody></table></div><div style="padding:10px 14px"><button class="btn sec small" id="code-add">Add a code</button>
+          <span class="muted small">Codes are never deleted, so older records keep their meaning. Every change is logged. Free-text reasons are matched to codes by <a class="lk" href="${esc(tableUrl(SCH() + '.gold_reason_code_map'))}" target="_blank" rel="noopener">gold_reason_code_map</a>.</span></div></div></details>`;
+    $('#dt-days').onchange = () => { DT_DAYS = Number($('#dt-days').value); renderDowntime(); };
+    document.querySelectorAll('[data-open-iss]').forEach(a => a.onclick = () => openIssue(a.dataset.openIss));
+    document.querySelectorAll('[data-rep-iss]').forEach(a => a.onclick = async () => { const r = JSON.parse(a.dataset.repIss);
+      try { const res = await post('api/issues', {well_id: r.well_id, title: `Repeat failure: ${r.reason_label} ×${r.stops} in ${r.window_days} days`, source: 'manual'}); await loadIssues(); renderDowntime(); openIssue(res.issue_id); } catch (e) { toast('Could not open the issue: ' + e.message); } });
+    const codeForm = (c = {}) => formModal(c.reason_code ? `Edit ${c.reason_code}` : 'Add a reason code', `<div class="frm"><div><label>Code</label><input id="rc-c" value="${esc(c.reason_code || '')}" ${c.reason_code ? 'readonly' : ''} placeholder="e.g. ROD-PART"></div>
+        <div><label>Group</label><select id="rc-g">${['Mechanical', 'Electrical', 'Facility', 'Midstream', 'Weather', 'Planned', 'Data', 'Other'].map(g => `<option ${g === c.reason_group ? 'selected' : ''}>${g}</option>`).join('')}</select></div>
+        <div class="full"><label>Label</label><input id="rc-l" value="${esc(c.label || '')}"></div><div class="full"><label>Description</label><textarea id="rc-d">${esc(c.description || '')}</textarea></div></div>`,
+      async () => { await post('api/reason-codes', {reason_code: val('rc-c'), label: val('rc-l'), reason_group: val('rc-g'), description: val('rc-d')}); $('#modal').hidden = true; toast('Reason code saved'); renderDowntime(); });
+    document.querySelectorAll('[data-code]').forEach(a => a.onclick = () => codeForm(JSON.parse(a.dataset.code)));
+    $('#code-add').onclick = () => codeForm();
+    bindCommon(box);
+  }
+
+  async function openIssue(id) {
+    if (!ISS || !ISS.issues.some(i => i.issue_id === id)) await loadIssues();
+    const i = ISS && ISS.issues.find(x => x.issue_id === id);
+    if (!i) { toast('Could not find ' + id); return; }
+    const cfg = ISS.settings, s = i.state, nexts = ISS.next[s] || [], needAppr = (i.est_cost_cad || 0) >= cfg.approval_threshold_cad;
+    const codeOpts = sel => ISS.codes.map(c => `<option value="${esc(c.reason_code)}" ${c.reason_code === sel ? 'selected' : ''}>${esc(c.label)} (${esc(c.reason_code)})</option>`).join('');
+    const forms = {
+      'Triaged': `<label>Triage: is it real, and how urgent?</label><textarea id="x-note" placeholder="e.g. Real: rate down 3 days running, no meter issue. Look at it this week."></textarea>`,
+      'Diagnosing': s === 'Verifying' || s === 'Closed' ? `<label>Why it needs more work</label><textarea id="x-note"></textarea>` : `<div class="note">Start working out what's causing it. Notes go in the thread below.</div>`,
+      'Fix Planned': s === 'Awaiting Approval' ? `<div class="note">Send it back to change the plan.</div><label>Revised plan</label><textarea id="x-plan">${esc(i.fix_plan || '')}</textarea><label>Revised estimate ($)</label><input id="x-cost" inputmode="decimal" value="${esc(i.est_cost_cad ?? '')}">`
+        : `<label>Diagnosis: what is causing it</label><textarea id="x-diag">${esc(i.diagnosis || '')}</textarea>
+           <div class="frm"><div><label>Kind of fix</label><select id="x-ft">${ISS.fix_types.map(t => `<option ${t === i.fix_type ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
+           <div><label>Estimated cost ($)</label><input id="x-cost" inputmode="decimal" value="${esc(i.est_cost_cad ?? '')}"></div></div><label>Fix plan</label><textarea id="x-plan">${esc(i.fix_plan || '')}</textarea>
+           <div class="muted small">Fixes estimated at $${fmt(cfg.approval_threshold_cad)} or more need the ${esc(cfg.approver_role.toLowerCase())}'s approval before they're scheduled.</div>`,
+      'Awaiting Approval': `<div class="note">Estimated at $${fmt(i.est_cost_cad)}: at or above the $${fmt(cfg.approval_threshold_cad)} limit, so the ${esc(cfg.approver_role.toLowerCase())} must approve it.</div>`,
+      'Scheduled': `<div class="frm"><div><label>Scheduled for</label><input id="x-date" type="date" min="${D.today}"></div><div><label>Work order (optional)</label><input id="x-wo" value="${esc(i.work_order || '')}"></div></div>`,
+      'In Progress': `<label>Work order (optional)</label><input id="x-wo" value="${esc(i.work_order || '')}">`,
+      'Verifying': `<div class="frm"><div><label>Date the fix was finished</label><input id="x-done" type="date" max="${new Date().toISOString().slice(0, 10)}"></div></div><label>What was done</label><textarea id="x-note"></textarea>
+        <div class="muted small">Verification compares production after this date with the type curve. Production data currently runs to ${esc(ISS.as_of)}.</div>`,
+      'Closed': `<div id="cl-ai"><button class="btn sec small" id="cl-suggest">${ic('flag')} Pre-fill the close-out</button> <span class="muted small">Volume and outcome from the data, reason code from the record's own words. You confirm or change every field.</span></div>
+        <div class="frm"><div><label>Reason code</label><select id="x-rc"><option value="">Pick one</option>${codeOpts(i.reason_code)}</select><div class="muted small" id="w-rc"></div></div>
+          <div><label>Outcome</label><select id="x-out"><option value="">Pick one</option>${ISS.outcomes.map(o => `<option>${o}</option>`).join('')}</select><div class="muted small" id="w-out"></div></div>
+          <div><label>Lost oil (bbl)</label><input id="x-lost" inputmode="decimal"><div class="muted small" id="w-lost"></div></div>
+          <div><label>Actual cost ($)</label><input id="x-acost" inputmode="decimal"><div class="muted small" id="w-acost"></div></div></div>
+        <label>Outcome note</label><textarea id="x-note"></textarea>`,
+    };
+    const ver = i.verification;
+    const facts = [['Problem', i.title], ['Opened', `${tsLocal(i.opened_at)} by ${i.opened_by} (${i.source})`],
+      ['At detection', `${fmt(i.baseline_oil_bopd, 1)} bbl/d vs ${fmt(i.expected_oil_bopd, 1)} expected · ${fmt(i.lost_bopd, 1)} bbl/d lost · $${fmt(i.value_cad_day)}/day`],
+      ['Today', `${fmt(i.now_lost_bopd, 1)} bbl/d lost · $${fmt(i.now_value_cad_day)}/day (snapshot ${ISS.as_of})`],
+      ['Flags merged', i.rule_ids.map(r => (RULES.find(x => x.id === r) || {}).name || r).join(', ')], ['Triage', i.triage_result], ['Diagnosis', i.diagnosis],
+      ['Fix', i.fix_type ? `${i.fix_type}: ${i.fix_plan || ''}` : null], ['Estimated cost', i.est_cost_cad !== null ? `$${fmt(i.est_cost_cad)}${needAppr ? ' (needs approval)' : ''}` : null],
+      ['Approval', i.approval], ['Scheduled', i.scheduled_date], ['Work order', i.work_order], ['Fix finished', i.fix_done_date ? `${i.fix_done_date}: ${i.fix_done_note || ''}` : null],
+      ['Reason code', i.reason_code], ['Lost oil', i.lost_oil_bbl !== null ? `${fmt(i.lost_oil_bbl)} bbl (${fmt(i.lost_boe)} BOE)` : null], ['Actual cost', i.actual_cost_cad !== null ? '$' + fmt(i.actual_cost_cad) : null],
+      ['Outcome', i.outcome ? `${i.outcome}${i.outcome_note ? ': ' + i.outcome_note : ''}` : null], ['Dismissed', i.dismissed_reason]].filter(x => x[1]);
+    showModal(`<div class="mhead"><h2>${esc(i.issue_id)} · ${esc(i.well_id)} ${esc(i.well_name || '')}</h2><button class="btn sec close" id="mx">Close</button></div><div class="mbody">
+      ${issBar(s)}
+      <div class="incgrid"><div>
+        <h3>Next step</h3>
+        ${nexts.length ? `<div class="card incnext" style="padding:12px 14px">${nexts.length > 1 ? `<div class="seg" style="margin-bottom:8px">${nexts.map((n, k) => `<button data-nx="${esc(n)}" class="${k === 0 ? 'on' : ''}">${esc(n)}</button>`).join('')}</div>` : `<b>${esc(nexts[0])}</b>`}
+            <div id="nx-form"></div><div class="errs" id="x-err"></div><button class="btn" id="x-go" style="margin-top:8px"></button></div>` : ''}
+        ${s === 'Awaiting Approval' ? `<div class="card incnext" style="padding:12px 14px;margin-top:8px"><b>Record the approval</b>
+            <div class="frm"><div><label>Decision</label><select id="ap-d"><option>Approved</option><option>Rejected</option></select></div><div><label>${esc(cfg.approver_role)}</label><input id="ap-by" placeholder="Name"></div>
+            <div class="full"><label>Note</label><input id="ap-n"></div></div><div class="errs" id="ap-err"></div><button class="btn sec" id="ap-go">Record decision</button>
+            <div class="muted small">In this demo anyone can record it for the approver; the log shows who did.</div></div>` : ''}
+        ${ver ? `<h3>Verification</h3><div class="card" style="padding:12px 14px"><span class="pill ${ver.status === 'back' ? 'ok' : ver.status === 'waiting' ? '' : 'warn'}">${esc({back: 'Back to expected', better: 'Better, still below expected', not_better: 'Not better', waiting: 'Not enough data yet'}[ver.status])}</span>
+            <div style="margin-top:6px">${esc(ver.text)}</div><div class="muted small">Source: ${esc(ver.source)}</div></div>` : ''}
+        <h3>Record</h3><div class="incfacts">${facts.map(([k, v]) => `<div><span>${esc(k)}</span>${esc(v)}</div>`).join('')}</div>
+        ${issOpen(i) ? `<details style="margin-top:10px"><summary class="lk">Dismiss: not a real issue</summary><label>Why</label><textarea id="ds-n" placeholder="e.g. Meter read zero for two days; field confirmed the well was flowing"></textarea>
+          <label class="chk"><input type="checkbox" id="ds-de" checked> Data error (records it under reason code DATA-ERROR)</label><div class="errs" id="ds-err"></div><button class="btn sec" id="ds-go">Dismiss</button></details>` : ''}
+      </div><div>
+        ${i.repeats.length ? `<h3>Repeat failures on this well</h3><div class="card" style="padding:10px 14px">${i.repeats.map(r => `<div><span class="pill warn">${r.stops} stops</span> ${esc(r.reason_label)} in ${ISS.settings.repeat_failure_days} days</div>`).join('')}</div>` : ''}
+        <h3>Thread</h3>
+        <ol class="inctl">${i.events.map(e => `<li><span class="muted">${esc(tsLocal(e.at))}</span> <b>${esc(e.action)}</b>${e.to_state && e.from_state ? ` <span class="muted">${esc(e.from_state)} → ${esc(e.to_state)}</span>` : ''} · <span class="muted">${esc(e.actor)}</span>${e.detail ? `<div>${esc(e.detail)}</div>` : ''}</li>`).join('')}</ol>
+        <div class="muted small">Insert-only (<a class="lk" href="${esc(tableUrl(SCH() + '.app_issue_events'))}" target="_blank" rel="noopener">app_issue_events</a>).</div>
+        <div class="frm" style="grid-template-columns:1fr;margin-top:8px"><div><label>Add a note</label><textarea id="is-note" style="min-height:60px"></textarea></div></div><button class="btn sec small" id="is-add">Add note</button>
+      </div></div></div>`);
+    let target = nexts[0], aiSug = null;
+    const again = async msg => { await loadIssues(); if (view === 'issues') renderIssues(); else render(); await openIssue(id); if (msg) toast(msg); };
+    const run = async (btn, errEl, fn, msg) => { btn.disabled = true; try { await fn(); await again(msg); } catch (e) { $(errEl).textContent = e.message; btn.disabled = false; } };
+    const drawForm = () => {
+      if (!$('#nx-form')) return;
+      $('#nx-form').innerHTML = forms[target] || '';
+      $('#x-go').textContent = target === 'Fix Planned' && s === 'Awaiting Approval' ? 'Send back to Fix Planned' : `Move to ${target}`;
+      $('#x-go').disabled = target === 'Awaiting Approval' && !needAppr || target === 'Scheduled' && needAppr && !String(i.approval || '').startsWith('Approved');
+      if (target === 'Scheduled' && s === 'Fix Planned' && needAppr) $('#nx-form').innerHTML = `<div class="note" style="font-weight:600">This fix needs approval first: move it to Awaiting Approval.</div>`;
+      if (target === 'Awaiting Approval' && !needAppr) $('#nx-form').innerHTML = `<div class="note">Under $${fmt(cfg.approval_threshold_cad)}: no approval needed. Schedule it instead.</div>`;
+      if ($('#cl-suggest')) $('#cl-suggest').onclick = async () => {
+        const b = $('#cl-suggest'); b.disabled = true; b.textContent = 'Working it out…';
+        try {
+          aiSug = await post(`api/issues/${id}/close-suggest`, {});
+          const set = (el, v) => { if (v !== null && v !== undefined && v !== '') $('#' + el).value = v; };
+          set('x-rc', aiSug.reason_code); set('x-out', aiSug.outcome); set('x-lost', aiSug.lost_oil_bbl); set('x-acost', aiSug.actual_cost_cad); set('x-note', aiSug.outcome_note);
+          const w = aiSug.why || {}; $('#w-rc').textContent = w.reason_code || ''; $('#w-out').textContent = w.outcome || ''; $('#w-lost').textContent = w.lost_oil_bbl || ''; $('#w-acost').textContent = w.actual_cost_cad || '';
+          $('#cl-ai').innerHTML = `<div class="note">Pre-filled for you to check. Nothing is saved until you close the issue; the log records whether you kept or changed these.</div>`;
+        } catch (e) { b.disabled = false; b.textContent = 'Pre-fill the close-out'; $('#x-err').textContent = e.message; }
+      };
+    };
+    document.querySelectorAll('[data-nx]').forEach(b => b.onclick = () => { target = b.dataset.nx; document.querySelectorAll('[data-nx]').forEach(x => x.classList.toggle('on', x === b)); drawForm(); });
+    drawForm();
+    if ($('#x-go')) $('#x-go').onclick = () => {
+      const body = {to: target, note: val('x-note'), diagnosis: val('x-diag'), fix_type: val('x-ft'), fix_plan: val('x-plan'), est_cost_cad: val('x-cost'), scheduled_date: val('x-date'),
+        work_order: val('x-wo'), fix_done_date: val('x-done'), reason_code: val('x-rc'), outcome: val('x-out'), lost_oil_bbl: val('x-lost'), actual_cost_cad: val('x-acost')};
+      if (target === 'Closed' && aiSug) {
+        const same = (a, b) => String(a ?? '') === String(b ?? '');
+        const changed = !same(aiSug.reason_code, body.reason_code) || !same(aiSug.outcome, body.outcome) || Number(aiSug.lost_oil_bbl) !== Number(body.lost_oil_bbl) || Number(aiSug.actual_cost_cad) !== Number(body.actual_cost_cad) || !same(aiSug.outcome_note || '', body.note || '');
+        body.ai_decision = changed ? 'edited' : 'accepted'; body.ai_suggestion = aiSug;
+      }
+      run($('#x-go'), '#x-err', () => post(`api/issues/${id}/transition`, body), `Moved to ${target}`);
+    };
+    if ($('#ap-go')) $('#ap-go').onclick = () => run($('#ap-go'), '#ap-err', () => post(`api/issues/${id}/approval`, {decision: val('ap-d'), approver: val('ap-by'), note: val('ap-n')}), 'Approval recorded');
+    if ($('#ds-go')) $('#ds-go').onclick = () => run($('#ds-go'), '#ds-err', () => post(`api/issues/${id}/transition`, {to: 'Dismissed', note: val('ds-n'), data_error: $('#ds-de').checked}), 'Dismissed');
+    $('#is-add').onclick = () => run($('#is-add'), '#x-err', () => post(`api/issues/${id}/notes`, {note: val('is-note')}), 'Note added');
+  }
+
+  // Morning briefing on My day. Safety lines are written by the server from the records; the AI only summarises the rest.
+  function briefRanking() {
+    return ACTIVE().concat(RANK.filter(r => r.tier === 'handled')).map(r => ({well_id: r.well_id, tier: r.tier, safety_flag: r.safety_worst || 'none',
+      flags: r.flags.map(f => ({rule: f.rule_name, safety: !!f.safety}))}));
+  }
+  async function loadBriefing(force) {
+    if (BRIEF[ENG] && !force && BRIEF[ENG].data) return;
+    BRIEF[ENG] = {loading: true};
+    if (view === 'day') drawBriefing();
+    try { BRIEF[ENG] = {data: await post('api/briefing', {engineer_id: ENG, ranking: briefRanking()})}; }
+    catch (e) { BRIEF[ENG] = {err: e.message}; }
+    if (view === 'day') drawBriefing();
+  }
+  function factLinks(ids, facts) {
+    return ids.map(fid => { const f = facts.find(x => x.id === fid); return f ? `<a class="lk fact" data-fact="${esc(fid)}" title="${esc(f.text + ' — ' + f.source)}">${esc(fid)}</a>` : ''; }).join(' ');
+  }
+  function drawBriefing() {
+    const el = $('#brief'); if (!el) return;
+    const b = BRIEF[ENG] || {};
+    if (b.loading || !b.data && !b.err) { el.innerHTML = `<div class="card brief"><b>Morning briefing</b> <span class="muted small">Pulling together overnight changes…</span><span class="skel" style="height:14px;width:70%;margin:10px 0"></span><span class="skel" style="height:14px;width:55%;margin:10px 0"></span></div>`; return; }
+    if (b.err) { el.innerHTML = `<div class="card brief"><b>Morning briefing</b> <span class="muted small">Couldn't build it: ${esc(b.err)}</span> <button class="btn sec small" id="br-re">Try again</button></div>`; $('#br-re').onclick = () => loadBriefing(true); return; }
+    const d = b.data, line = (x, cls = '') => `<li class="${cls}">${x.well_id ? `<a class="lk" data-well="${esc(x.well_id)}">${esc(x.well_id)}</a> ` : ''}${esc(x.well_id ? x.text.replace(new RegExp('^' + x.well_id + '\\s*'), '') : x.text)} <span class="factrefs">${factLinks(x.facts, d.facts)}</span></li>`;
+    el.innerHTML = `<div class="card brief"><div class="bhead"><b>Morning briefing</b> <span class="muted small">data through ${esc(d.as_of)} · built ${esc(d.generated_at)}</span>
+        <span style="margin-left:auto"></span><button class="btn small" id="br-call">Start morning call</button> <button class="btn sec small" id="br-re">Refresh</button></div>
+      <div class="bsec"><div class="bt crit">${ic('shield')} Safety first</div>${d.safety.length ? `<ul>${d.safety.map(x => line(x, 'saf')).join('')}</ul>` : '<div class="small">No open safety incidents or safety flags on these wells.</div>'}</div>
+      <div class="bsec"><div class="bt">What changed and what matters most</div><ul>${d.summary.map(x => line(x)).join('') || '<li class="muted">Nothing new.</li>'}</ul>
+        ${d.ai_note ? `<div class="muted small">${esc(d.ai_note)}</div>` : d.model ? `<div class="muted small">Summary written by AI from the numbered facts${d.dropped ? `; ${d.dropped} line(s) dropped because a number didn't match the facts` : ''}. Hover a fact number to see it and its source.</div>` : ''}</div>
+      <div class="bsec"><div class="bt">Decisions needed</div>${d.decisions.length ? `<ul>${d.decisions.map(x => `<li>${esc(x.text)} ${x.kind === 'issue' ? `<a class="lk" data-open-iss="${esc(x.ref)}">open</a>` : ''}</li>`).join('')}</ul>` : '<div class="small">None waiting.</div>'}</div>
+      <details class="small"><summary class="lk">All facts and sources (${d.facts.length})</summary><ol class="factlist">${d.facts.map(f => `<li id="fact-${esc(f.id)}"><b>${esc(f.id)}</b> ${esc(f.text)} <span class="muted">— ${esc(f.source)}</span></li>`).join('')}</ol><div class="muted">${esc(d.method)}</div></details></div>`;
+    $('#br-re').onclick = () => loadBriefing(true);
+    $('#br-call').onclick = () => morningCall(d);
+    el.querySelectorAll('[data-open-iss]').forEach(a => a.onclick = () => openIssue(a.dataset.openIss));
+    el.querySelectorAll('[data-fact]').forEach(a => a.onclick = () => { const det = el.querySelector('details'); det.open = true; const t = $('#fact-' + a.dataset.fact); if (t) { t.scrollIntoView({block: 'center'}); t.classList.add('hl'); setTimeout(() => t.classList.remove('hl'), 1500); } });
+    bindCommon(el);
+  }
+  function morningCall(d) {
+    const items = [...d.safety.map(x => ({...x, sec: 'Safety'})), ...d.decisions.map(x => ({...x, sec: 'Decisions'})),
+      ...d.facts.filter(f => f.kind === 'issue' && !d.decisions.some(x => x.ref === f.ref)).map(f => ({text: f.text, facts: [f.id], kind: 'issue', ref: f.ref, well_id: f.well_id, sec: 'Open issues'}))];
+    let lastSec = null;
+    showModal(`<div class="mhead"><h2>Morning call · ${esc(engName())} · ${esc(D.today)}</h2><button class="btn sec close" id="mx">Close</button></div><div class="mbody">
+      <div class="note">Go down the agenda: safety first. Notes and decisions are saved into each issue or incident record when you save the call. Items with nothing written are skipped.</div>
+      <ol class="agenda">${items.map((x, k) => { const h = x.sec !== lastSec ? `<li class="agsec">${esc(x.sec)}</li>` : ''; lastSec = x.sec; return h + `<li class="agitem ${x.sec === 'Safety' ? 'saf' : ''}">
+        <div>${esc(x.text)} <span class="factrefs">${factLinks(x.facts || [], d.facts)}</span></div>
+        <div class="frm"><div><label>Decision</label><input data-dec="${k}" placeholder="${x.sec === 'Safety' ? 'e.g. Field foreman to check it on site this morning' : x.kind === 'well' ? 'e.g. Open an issue: check the pump' : 'e.g. Approve the pump change'}"></div><div><label>Note</label><input data-note2="${k}"></div></div>
+        ${x.kind === 'well' && x.sec !== 'Safety' ? `<label class="chk small"><input type="checkbox" data-oi="${k}"> Open a production issue for ${esc(x.ref)} with this decision</label>` : ''}
+        <div class="muted small">Saves to: ${x.kind === 'incident' ? 'safety incident ' + esc(x.ref) : x.kind === 'issue' ? 'issue ' + esc(x.ref) : 'the call record' + (x.sec !== 'Safety' ? ' (or a new issue if ticked)' : '')}</div></li>`; }).join('') || '<li class="muted">Nothing on the agenda.</li>'}</ol>
+      <div class="errs" id="mc-err"></div><button class="btn" id="mc-save">Save the call</button></div>`);
+    $('#mc-save').onclick = async () => {
+      const out = items.map((x, k) => ({kind: x.kind, ref: x.ref, text: x.text, section: x.sec, decision: ($(`[data-dec="${k}"]`) || {}).value, note: ($(`[data-note2="${k}"]`) || {}).value, open_issue: !!($(`[data-oi="${k}"]`) || {}).checked}));
+      $('#mc-save').disabled = true;
+      try { const r = await post('api/morning-calls', {engineer_id: ENG, call_date: D.today, briefing: {as_of: d.as_of, generated_at: d.generated_at, safety: d.safety, summary: d.summary, decisions: d.decisions, facts: d.facts}, items: out});
+        $('#modal').hidden = true; await loadIssues(); await loadIncidents(); render(); toast(`Call saved (${r.call_id}). Written to ${r.written_to.length} record(s).`); }
+      catch (e) { $('#mc-err').textContent = e.message; $('#mc-save').disabled = false; }
+    };
+  }
+  async function wellDowntimeExtras(id) {
+    const el = $('#dt-extra'); if (!el) return;
+    try {
+      const d = await api('api/downtime/well/' + encodeURIComponent(id)); if (DRAWER_WELL !== id) return;
+      const rep = d.repeats.filter(r => r.repeat), iss = issFor(id);
+      el.innerHTML = `${iss ? `<div class="note">Open production issue: <a class="lk" data-open-iss="${esc(iss.issue_id)}">${esc(iss.issue_id)}</a> ${issPill(iss.state)} ${esc(iss.title)}</div>` : ''}
+        ${rep.length ? `<div class="note" style="font-weight:600">${ic('alert')} Repeat failure: ${rep.map(r => `${esc(r.reason_label)} ×${r.stops} in ${r.window_days} days (${fmt(r.lost_boe, 1)} BOE, $${fmt(r.lost_value_cad)})`).join('; ')}</div>` : ''}
+        ${d.events.length ? `<div class="small"><b>By standard reason code</b> (last ${d.events.length} stops): ${Object.entries(d.events.reduce((a, e) => { a[e.reason_label] = (a[e.reason_label] || 0) + 1; return a; }, {})).map(([k, v]) => `${esc(k)} ×${v}`).join(' · ')}</div>` : ''}`;
+      el.querySelectorAll('[data-open-iss]').forEach(a => a.onclick = () => openIssue(a.dataset.openIss));
+    } catch (e) { el.innerHTML = `<div class="muted small">Couldn't load reason codes: ${esc(e.message)}</div>`; }
   }
 
   // ---------------- Well report (a printable document per well) ----------------
